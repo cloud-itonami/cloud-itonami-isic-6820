@@ -1,4 +1,4 @@
-{:itonami.blueprint/id "cloud-itonami-6820"
+{:itonami.blueprint/id "cloud-itonami-isic-6820"
  :itonami.blueprint/name "Real estate activities on a fee or contract basis"
  :itonami.blueprint/isic-rev5 "6820"
  :itonami.blueprint/domain :property/fee-services

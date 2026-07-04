@@ -1,4 +1,4 @@
-# cloud-itonami-6820
+# cloud-itonami-isic-6820
 
 Open Business Blueprint for **ISIC Rev.5 6820**: Real estate activities on a fee or contract basis.
 

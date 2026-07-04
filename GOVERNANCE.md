@@ -1,6 +1,6 @@
 # Governance
 
-`cloud-itonami-6820` is an OSS open-business blueprint for real estate activities performed for others on a fee or contract basis -- property management, appraisal and consultancy for property owners who retain title (contrast with cloud-itonami-L6810's own/leased-property agency).
+`cloud-itonami-isic-6820` is an OSS open-business blueprint for real estate activities performed for others on a fee or contract basis -- property management, appraisal and consultancy for property owners who retain title (contrast with cloud-itonami-L6810's own/leased-property agency).
 Governance covers both the capability layer and the operator model.
 
 ## Maintainers

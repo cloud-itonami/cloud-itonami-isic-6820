@@ -2,7 +2,7 @@
 
 ## Classification
 
-- Repository: `cloud-itonami-6820`
+- Repository: `cloud-itonami-isic-6820`
 - ISIC Rev.5: `6820`
 - Activity: real estate activities performed for others on a fee or contract basis -- property management, appraisal and consultancy for property owners who retain title (contrast with cloud-itonami-L6810's own/leased-property agency)
 - Social impact: financial inclusion, data sovereignty, transparent audit
