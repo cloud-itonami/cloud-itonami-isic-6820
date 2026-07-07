@@ -32,7 +32,17 @@
 
 ## Trust Controls
 
-- no fee is disbursed and no contract is executed on the client's behalf without human sign-off
-- a fabricated valuation forces a hold, not an override
-- every disbursement/contract path is auditable
+- no fee is disbursed and no contract is executed on the client's
+  behalf without human sign-off
+- a fabricated jurisdiction disclosure/trust-account citation,
+  unsupported evidence, a fee filed for a property not under
+  management, a claimed fee amount that does not match this vehicle's
+  own independent recompute, a contract execution attempt with no
+  pending contract on file, or a contract whose value exceeds the
+  owner's own pre-authorized limit -- each forces a hold, not an
+  override
+- a fee cannot be paid twice: a double-payment attempt is held off this
+  actor's own payment history alone, with no upstream comparison needed
+- every intake, assessment, filing, payment and contract-execution path
+  is auditable
 - emergency manual override paths remain outside LLM control

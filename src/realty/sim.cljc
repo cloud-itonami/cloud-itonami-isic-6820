@@ -1,0 +1,88 @@
+(ns realty.sim
+  "Demo driver -- `clojure -M:dev:run`. Walks a clean property through
+  intake -> jurisdiction property-management disclosure assessment ->
+  fee filing (auto-commits; no capital risk) -> fee-payment proposal
+  (always escalates) -> human approval -> commit, then a clean property
+  with a pending contract through contract-execution (always escalates)
+  -> human approval -> commit, then shows seven HARD holds (a
+  jurisdiction with no spec-basis, a fee filed for a property not under
+  management, a fee amount that doesn't match this actor's own
+  independent recompute, a contract whose value exceeds the owner's own
+  pre-authorized limit, a contract-execution attempt for a property
+  with no pending contract, a payment of a nonexistent fee, and a
+  double-payment of an already-paid fee) that never reach a human at
+  all, and prints the audit ledger + the draft fee-payment and
+  contract-execution records."
+  (:require [langgraph.graph :as g]
+            [realty.store :as store]
+            [realty.operation :as op]))
+
+(def operator {:actor-id "op-1" :actor-role :property-manager :phase 3})
+
+(defn- exec! [actor tid request context]
+  (g/run* actor {:request request :context context} {:thread-id tid}))
+
+(defn- approve! [actor tid]
+  (g/run* actor {:approval {:status :approved :by "op-1"}} {:thread-id tid :resume? true}))
+
+(defn -main [& _]
+  (let [db (store/seed-db)
+        actor (op/build db)]
+    (println "== property/intake property-1 (JPN, residential, clean; re-confirms an existing field -- property-1 is already :under-management, unlike casualty's :intake -> :ready -> :bound lifecycle, there is no separate property-binding actuation in this domain) ==")
+    (println (exec! actor "t1" {:op :property/intake :subject "property-1"
+                                :patch {:id "property-1" :owner "Sakura Holdings"}} operator))
+
+    (println "== jurisdiction/assess property-1 (escalates -- human approves) ==")
+    (println (exec! actor "t2" {:op :jurisdiction/assess :subject "property-1"} operator))
+    (println (approve! actor "t2"))
+
+    (println "== fee/file fee-1 against property-1 (under-management; 200,000 rent x 8% = 16,000 correct; auto-commits, no capital risk) ==")
+    (println (exec! actor "t3" {:op :fee/file :subject "fee-1" :property-id "property-1"
+                                :collected-rent 200000 :claimed-fee-amount 16000} operator))
+
+    (println "== fee/pay fee-1 (always escalates -- actuation/pay-fee) ==")
+    (let [r (exec! actor "t4" {:op :fee/pay :subject "fee-1"} operator)]
+      (println r)
+      (println "-- human property manager approves --")
+      (println (approve! actor "t4")))
+
+    (println "== contract/execute property-4 (GBR; pending contract 800,000 within 1,000,000 authorization; always escalates -- actuation/execute-contract) ==")
+    (let [r (exec! actor "t5" {:op :contract/execute :subject "property-4"} operator)]
+      (println r)
+      (println "-- human property manager approves --")
+      (println (approve! actor "t5")))
+
+    (println "== jurisdiction/assess property-2 (no spec-basis -> HARD hold) ==")
+    (println (exec! actor "t6" {:op :jurisdiction/assess :subject "property-2" :no-spec? true} operator))
+
+    (println "== fee/file fee-2 against property-3 (never under management -> HARD hold, never reaches a human) ==")
+    (println (exec! actor "t7" {:op :fee/file :subject "fee-2" :property-id "property-3"
+                                :collected-rent 150000 :claimed-fee-amount 12000} operator))
+
+    (println "== fee/file fee-3 against property-1 (200,000 rent, 20,000 WRONGLY claimed -- correct fee is 16,000; filing itself auto-commits) ==")
+    (println (exec! actor "t8a" {:op :fee/file :subject "fee-3" :property-id "property-1"
+                                 :collected-rent 200000 :claimed-fee-amount 20000} operator))
+
+    (println "== fee/pay fee-3 (claimed amount does not match this actor's own recompute -> HARD hold) ==")
+    (println (exec! actor "t8" {:op :fee/pay :subject "fee-3"} operator))
+
+    (println "== contract/execute property-5 (900,000 contract exceeds 500,000 authorization limit -> HARD hold) ==")
+    (println (exec! actor "t9" {:op :contract/execute :subject "property-5"} operator))
+
+    (println "== contract/execute property-6 (no pending contract -> HARD hold) ==")
+    (println (exec! actor "t10" {:op :contract/execute :subject "property-6"} operator))
+
+    (println "== fee/pay fee-999 (nonexistent fee -> HARD hold) ==")
+    (println (exec! actor "t11" {:op :fee/pay :subject "fee-999"} operator))
+
+    (println "== fee/pay fee-1 AGAIN (double-payment of an already-paid fee -> HARD hold) ==")
+    (println (exec! actor "t12" {:op :fee/pay :subject "fee-1"} operator))
+
+    (println "== audit ledger ==")
+    (doseq [f (store/ledger db)] (println f))
+
+    (println "== draft fee-payment records ==")
+    (doseq [r (store/payment-history db)] (println r))
+
+    (println "== draft contract-execution records ==")
+    (doseq [r (store/contract-history db)] (println r))))
