@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real estate activities on a fee or contract basis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fafafa;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid #ddd;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 0.5rem;
+            color: #1a1a1a;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .classification {
+            display: inline-block;
+            background: #f0f0f0;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        .pitch {
+            margin-bottom: 2.5rem;
+            font-size: 1rem;
+            line-height: 1.8;
+            color: #444;
+        }
+
+        .pitch p {
+            margin-bottom: 0.8rem;
+        }
+
+        .features {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin-bottom: 2.5rem;
+            border-left: 4px solid #0066cc;
+        }
+
+        .features h3 {
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            color: #1a1a1a;
+        }
+
+        .features ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .features li {
+            padding: 0.4rem 0;
+            color: #555;
+        }
+
+        .features li:before {
+            content: "→ ";
+            color: #0066cc;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .ctas {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 640px) {
+            .ctas {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .cta-button {
+            display: block;
+            padding: 1.2rem;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            border: 2px solid;
+        }
+
+        .cta-primary {
+            background: #0066cc;
+            color: white;
+            border-color: #0066cc;
+        }
+
+        .cta-primary:hover {
+            background: #0052a3;
+            border-color: #0052a3;
+        }
+
+        .cta-secondary {
+            background: white;
+            color: #0066cc;
+            border-color: #0066cc;
+        }
+
+        .cta-secondary:hover {
+            background: #f0f7ff;
+            border-color: #0052a3;
+            color: #0052a3;
+        }
+
+        .links {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin-top: 2rem;
+            text-align: center;
+        }
+
+        .links h3 {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            color: #1a1a1a;
+        }
+
+        .links a {
+            display: inline-block;
+            margin: 0.5rem 1rem;
+            color: #0066cc;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #ddd;
+            font-size: 0.85rem;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Real estate activities on a fee or contract basis</h1>
+            <p class="subtitle">Open Business Blueprint for ISIC Rev.5 6820</p>
+            <div class="classification">ISIC 6820 • Property Management • Fee-Based Services</div>
+        </header>
+
+        <div class="pitch">
+            <p>A complete, governed, open-source actor system for property-management firms to accept managed-property intake, compute management fees, and execute vendor/maintenance contracts on property owners' behalf — all under independent verification and immutable audit ledger.</p>
+
+            <p>Built on <a href="https://github.com/com-junkawasaki/langgraph-clj">langgraph-clj</a> StateGraph runtime and the Real-Estate Fee-Services Governor: an independent verification layer that prevents unauthorized fee payments, fabricated jurisdiction citations, and contract overages through spec-backed, evidence-complete validation before any human sign-off.</p>
+
+            <p>Licensed AGPL-3.0-or-later. Designed to be forked, deployed, and operated by any licensed property-management firm seeking to build a governed, auditable, and portable fee-based services business.</p>
+        </div>
+
+        <div class="features">
+            <h3>What this actor covers</h3>
+            <ul>
+                <li>Managed-property intake with jurisdiction-specific disclosure requirements</li>
+                <li>Fee filing and payment with independent verification against your own fee-rate formula</li>
+                <li>Vendor/maintenance contract execution, gated on owner authorization limits</li>
+                <li>Immutable audit ledger for every intake, assessment, filing, payment and execution decision</li>
+                <li>Human approval workflow for all high-stakes actions</li>
+                <li>Robotics-ready integration points for property-condition inspection</li>
+            </ul>
+        </div>
+
+        <div class="ctas">
+            <a href="https://itonami.cloud/isco-1212/" class="cta-button cta-primary">Fork & Self-Host</a>
+            <a href="https://itonami.cloud/docs/go-live.md" class="cta-button cta-secondary">Managed Hosting →</a>
+        </div>
+
+        <div class="links">
+            <h3>Resources</h3>
+            <a href="../README.md">Repository README</a>
+            <a href="operator-quickstart.md">Operator Quickstart</a>
+            <a href="business-model.md">Business Model</a>
+            <a href="adr/0001-architecture.md">Architecture Decision Record</a>
+        </div>
+
+        <footer>
+            <p>cloud-itonami-isic-6820 • AGPL-3.0-or-later • <a href="https://github.com/cloud-itonami">github.com/cloud-itonami</a></p>
+        </footer>
+    </div>
+</body>
+</html>
