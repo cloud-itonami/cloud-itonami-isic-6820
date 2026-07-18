@@ -1,0 +1,195 @@
+(ns realty.render-html
+  "Build-time HTML renderer for `docs/samples/operator-console.html`.
+
+  Closes flagship checklist item 2 (com-junkawasaki/root ADR-2607189300,
+  Wave5 rollout ledger seq 6): this repo previously had NO demo page and
+  no generator at all. This namespace drives the REAL actor stack
+  (`realty.operation` -> `realty.governor` -> `realty.store`) through a
+  scenario adapted from this repo's own `realty.sim` demo driver
+  (`clojure -M:dev:run`, confirmed to run correctly against the real
+  seeded property directory before this file was written -- unlike
+  `cloud-itonami-isic-851`'s `schoolops.sim`, this repo's own sim driver
+  uses ids that DO match `realty.store/demo-data`, so it was safe to
+  reuse rather than author from scratch), trimmed to a representative
+  subset (one full commit->escalate->approve lifecycle, one contract
+  execution, and three distinct HARD-hold reasons) and rendered
+  deterministically -- no invented numbers, no timestamps in the page
+  content, byte-identical across reruns against the same seed (verified
+  by diffing two consecutive runs).
+
+  Usage: `clojure -M:dev:render-html [out-file]`
+  (default `docs/samples/operator-console.html`)."
+  (:require [clojure.string :as str]
+            [realty.store :as store]
+            [realty.operation :as op]
+            [langgraph.graph :as g]))
+
+(def ^:private operator
+  {:actor-id "op-1" :actor-role :property-manager :phase 3})
+
+(defn- exec! [actor tid request]
+  (g/run* actor {:request request :context operator} {:thread-id tid}))
+
+(defn- approve! [actor tid]
+  (g/run* actor {:approval {:status :approved :by "op-1"}}
+          {:thread-id tid :resume? true}))
+
+(defn run-demo!
+  "Runs a fresh seeded store through a scenario mixing every disposition
+  this actor can reach: property-1 clears intake (auto-commit, no
+  capital risk), a jurisdiction disclosure assessment (ALWAYS escalates
+  -- approved), a correctly-computed fee filing (auto-commit), and the
+  resulting fee payment (ALWAYS escalates -- approved); property-4
+  clears its pending-contract execution (ALWAYS escalates -- approved);
+  property-2 HARD-holds a jurisdiction assessment with no spec-basis;
+  property-3 HARD-holds a fee filed against a property never under
+  management; property-5 HARD-holds a contract-execution attempt whose
+  value (900,000) exceeds the owner's own pre-authorized limit
+  (500,000). Every HARD hold never reaches a human. Returns the
+  resulting store -- every field read by `render` below is real
+  governor/store output, not a hand-typed copy."
+  []
+  (let [db (store/seed-db)
+        actor (op/build db)]
+    (exec! actor "p1-intake" {:op :property/intake :subject "property-1"
+                               :patch {:id "property-1" :owner "Sakura Holdings"}})
+
+    (exec! actor "p1-assess" {:op :jurisdiction/assess :subject "property-1"})
+    (approve! actor "p1-assess")
+
+    (exec! actor "p1-fee-file" {:op :fee/file :subject "fee-1" :property-id "property-1"
+                                 :collected-rent 200000 :claimed-fee-amount 16000})
+
+    (exec! actor "p1-fee-pay" {:op :fee/pay :subject "fee-1"})
+    (approve! actor "p1-fee-pay")
+
+    (exec! actor "p4-contract" {:op :contract/execute :subject "property-4"})
+    (approve! actor "p4-contract")
+
+    (exec! actor "p2-assess" {:op :jurisdiction/assess :subject "property-2" :no-spec? true})
+
+    (exec! actor "p3-fee-file" {:op :fee/file :subject "fee-2" :property-id "property-3"
+                                 :collected-rent 150000 :claimed-fee-amount 12000})
+
+    (exec! actor "p5-contract" {:op :contract/execute :subject "property-5"})
+    db))
+
+;; ----------------------------- rendering -----------------------------
+
+(defn- esc [v]
+  (-> (str v)
+      (str/replace "&" "&amp;")
+      (str/replace "<" "&lt;")
+      (str/replace ">" "&gt;")))
+
+(defn- last-fact-for [ledger property-id]
+  (last (filter #(= (:subject %) property-id) ledger)))
+
+(defn- status-cell [ledger property-id]
+  (let [f (last-fact-for ledger property-id)]
+    (cond
+      (nil? f) "<span class=\"muted\">no activity</span>"
+      (= :committed (:t f)) "<span class=\"ok\">committed</span>"
+      (= :approval-granted (:t f)) "<span class=\"ok\">approved &amp; committed</span>"
+      (= :governor-hold (:t f))
+      (let [rule (-> f :violations first :rule)]
+        (str "<span class=\"critical\">HARD hold &middot; " (esc (name (or rule :unknown))) "</span>"))
+      (= :approval-requested (:t f)) "<span class=\"warn\">awaiting approval</span>"
+      :else "<span class=\"muted\">in progress</span>")))
+
+(defn- property-row [ledger {:keys [id owner jurisdiction property-type status]}]
+  (format "        <tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+          (esc id) (esc owner) (esc jurisdiction) (esc (name (or property-type :n-a)))
+          (esc (name (or status :n-a))) (status-cell ledger id)))
+
+(defn- ledger-row [{:keys [t op subject disposition basis]}]
+  (format "        <tr><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td></tr>"
+          (esc (name t)) (esc (name (or op :n-a))) (esc subject)
+          (esc (or (some->> basis (map name) (str/join ", ")) (some-> disposition name) ""))))
+
+(def ^:private action-gate-rows
+  ;; Static description of this actor's own op contract (README `Ops`
+  ;; table, `realty.governor`/`realty.phase`) -- documentation of fixed
+  ;; behavior, not runtime telemetry, so it is legitimately
+  ;; hand-described rather than derived from a live run.
+  ["        <tr><td><code>:property/intake</code></td><td><span class=\"ok\">auto-commit when clean, no capital risk</span></td></tr>"
+   "        <tr><td><code>:jurisdiction/assess</code></td><td><span class=\"warn\">ALWAYS human approval</span></td></tr>"
+   "        <tr><td><code>:fee/file</code></td><td><span class=\"ok\">auto-commit when clean, no capital risk</span></td></tr>"
+   "        <tr><td><code>:fee/pay</code></td><td><span class=\"warn\">ALWAYS human approval &middot; independent fee recompute</span></td></tr>"
+   "        <tr><td><code>:contract/execute</code></td><td><span class=\"warn\">ALWAYS human approval &middot; authorization-limit checked</span></td></tr>"])
+
+(defn render
+  "Renders the full operator-console.html document from a store `db`
+  that has already run `run-demo!` (or any other real scenario)."
+  [db]
+  (let [ledger (vec (store/ledger db))
+        properties (->> (store/all-properties db)
+                        (filter #(#{"property-1" "property-2" "property-3" "property-4" "property-5"} (:id %)))
+                        (sort-by :id))
+        property-rows (str/join "\n" (map (partial property-row ledger) properties))
+        ledger-rows (str/join "\n" (map ledger-row ledger))]
+    (str
+     "<html><head><meta charset=\"utf-8\"><title>cloud-itonami-isic-6820 &middot; real-estate fee-services</title><style>\n"
+     "table { width: 100%; border-collapse: collapse; font-size: 14px; }\n"
+     ".ok { color: #137a3f; }\n"
+     "body { font-family: system-ui,-apple-system,sans-serif; margin: 0; color: #1a1a1a; background: #fafafa; }\n"
+     "header.bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #fff; border-bottom: 1px solid #e5e5e5; }\n"
+     "th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }\n"
+     "h2 { margin-top: 0; font-size: 15px; }\n"
+     ".warn { color: #b25c00; background: #fff8e1; padding: 2px 6px; border-radius: 4px; }\n"
+     "main { max-width: 980px; margin: 24px auto; padding: 0 20px; }\n"
+     "header.bar h1 { font-size: 18px; margin: 0; font-weight: 600; }\n"
+     ".muted { color: #888; font-size: 13px; }\n"
+     ".critical { color: #fff; background: #b3261e; padding: 2px 6px; border-radius: 4px; font-weight: 600; }\n"
+     ".card { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 16px; }\n"
+     ".err { color: #b3261e; background: #fbe9e7; padding: 2px 6px; border-radius: 4px; }\n"
+     "th { font-weight: 600; color: #555; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }\n"
+     "header.bar .badge { margin-left: auto; font-size: 12px; color: #666; }\n"
+     "code { font-size: 12px; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }\n"
+     "</style></head><body>\n"
+     "<header class=\"bar\">\n"
+     "  <h1>Real-estate fee-services (ISIC 6820) — Operator Console</h1>\n"
+     "  <span class=\"badge\">read-only sample · governor-gated · fee/contract actuation always human-approved</span>\n"
+     "</header>\n"
+     "<main>\n"
+     "  <section class=\"card\">\n"
+     "    <h2>Managed properties</h2>\n"
+     "    <p class=\"muted\">Demo snapshot — build-time-generated from <code>realty.store</code> via <code>realty.render-html</code> (<code>clojure -M:dev:render-html</code>), regenerated nightly.</p>\n"
+     "    <table>\n"
+     "      <thead><tr><th>Property</th><th>Owner</th><th>Jurisdiction</th><th>Type</th><th>Status</th><th>Last op status</th></tr></thead>\n"
+     "      <tbody>\n"
+     property-rows "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n"
+     "  <section class=\"card\">\n"
+     "    <h2>Action gate (Real-Estate Fee-Services Governor)</h2>\n"
+     "    <p class=\"muted\">HARD holds cannot be overridden. Fee amounts are independently recomputed, never trusted from the proposal; contract values are checked against the owner's own pre-authorized limit.</p>\n"
+     "    <table>\n"
+     "      <thead><tr><th>Op</th><th>Gate</th></tr></thead>\n"
+     "      <tbody>\n"
+     (str/join "\n" action-gate-rows) "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n"
+     "  <section class=\"card\">\n"
+     "    <h2>Audit ledger (this run)</h2>\n"
+     "    <p class=\"muted\">Append-only decision-fact log — every proposal, hold and commit this scenario produced.</p>\n"
+     "    <table>\n"
+     "      <thead><tr><th>Fact</th><th>Op</th><th>Subject</th><th>Basis</th></tr></thead>\n"
+     "      <tbody>\n"
+     ledger-rows "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n"
+     "</main>\n"
+     "</body></html>\n")))
+
+(defn -main [& args]
+  (let [out (or (first args) "docs/samples/operator-console.html")
+        db (run-demo!)
+        html (render db)]
+    (spit out html)
+    (println "wrote" out "(" (count (store/ledger db)) "ledger facts,"
+             (count (store/payment-history db)) "payments,"
+             (count (store/contract-history db)) "contract executions )")))
