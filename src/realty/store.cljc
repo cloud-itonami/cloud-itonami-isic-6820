@@ -40,10 +40,9 @@
   audit trail a property owner trusting a manager needs, and the
   evidence an operator needs if a fee payment or a contract execution
   is later disputed."
-  (:require #?(:clj  [clojure.edn :as edn]
-               :cljs [cljs.reader :as edn])
-            [realty.registry :as registry]
-            [langchain.db :as d]))
+  (:require [realty.registry :as registry]
+            [langchain.db :as d]
+            [langchain-store.core :as ls]))
 
 (defprotocol Store
   (property [s id])
@@ -208,16 +207,13 @@
    :sequence/jurisdiction      {:db/unique :db.unique/identity}
    :contract-sequence/jurisdiction {:db/unique :db.unique/identity}})
 
-(defn- enc [v] (pr-str v))
-(defn- dec* [s] (when s (edn/read-string s)))
-
 (defn- property->tx
   "`:pending-contract` is written whenever the PATCH mentions the key at
   all (`contains?`, not truthiness) -- a legitimate value is `nil`
   ('no contract currently pending'), so a truthiness check would skip
   writing a genuine clear-to-nil. But it must NOT be written on a
   partial patch that never mentions the key at all (e.g. a bare
-  `{:status :ready}` upsert) -- writing `(enc nil)` unconditionally on
+  `{:status :ready}` upsert) -- writing `(ls/enc nil)` unconditionally on
   every patch would silently clobber an existing pending contract."
   [{:keys [id owner address property-type monthly-rent management-fee-rate
           contract-authorization-limit jurisdiction status contract-number] :as m}]
@@ -228,7 +224,7 @@
     monthly-rent                   (assoc :property/monthly-rent monthly-rent)
     management-fee-rate            (assoc :property/management-fee-rate management-fee-rate)
     contract-authorization-limit   (assoc :property/contract-authorization-limit contract-authorization-limit)
-    (contains? m :pending-contract) (assoc :property/pending-contract (enc (:pending-contract m)))
+    (contains? m :pending-contract) (assoc :property/pending-contract (ls/enc (:pending-contract m)))
     jurisdiction                   (assoc :property/jurisdiction jurisdiction)
     status                         (assoc :property/status status)
     contract-number                (assoc :property/contract-number contract-number)))
@@ -244,7 +240,7 @@
      :property-type (:property/property-type m) :monthly-rent (:property/monthly-rent m)
      :management-fee-rate (:property/management-fee-rate m)
      :contract-authorization-limit (:property/contract-authorization-limit m)
-     :pending-contract (dec* (:property/pending-contract m))
+     :pending-contract (ls/dec* (:property/pending-contract m))
      :jurisdiction (:property/jurisdiction m) :status (:property/status m)
      :contract-number (:property/contract-number m)}))
 
@@ -276,21 +272,21 @@
   (fee [_ id]
     (pull->fee (d/pull (d/db conn) fee-pull [:fee/id id])))
   (assessment-of [_ property-id]
-    (dec* (d/q '[:find ?p . :in $ ?pid
+    (ls/dec* (d/q '[:find ?p . :in $ ?pid
                 :where [?a :assessment/property-id ?pid] [?a :assessment/payload ?p]]
               (d/db conn) property-id)))
   (ledger [_]
     (->> (d/q '[:find ?s ?f :where [?e :ledger/seq ?s] [?e :ledger/fact ?f]] (d/db conn))
          (sort-by first)
-         (mapv (comp dec* second))))
+         (mapv (comp ls/dec* second))))
   (payment-history [_]
     (->> (d/q '[:find ?s ?r :where [?e :payment/seq ?s] [?e :payment/record ?r]] (d/db conn))
          (sort-by first)
-         (mapv (comp dec* second))))
+         (mapv (comp ls/dec* second))))
   (contract-history [_]
     (->> (d/q '[:find ?s ?r :where [?e :contract/seq ?s] [?e :contract/record ?r]] (d/db conn))
          (sort-by first)
-         (mapv (comp dec* second))))
+         (mapv (comp ls/dec* second))))
   (next-sequence [_ jurisdiction]
     (or (d/q '[:find ?n . :in $ ?j
               :where [?e :sequence/jurisdiction ?j] [?e :sequence/next ?n]]
@@ -309,7 +305,7 @@
       (d/transact! conn [(property->tx value)])
 
       :assessment/set
-      (d/transact! conn [{:assessment/property-id (first path) :assessment/payload (enc payload)}])
+      (d/transact! conn [{:assessment/property-id (first path) :assessment/payload (ls/enc payload)}])
 
       :fee/filed
       (d/transact! conn [(fee->tx payload)])
@@ -322,7 +318,7 @@
         (d/transact! conn
                      [(fee->tx (assoc fee-patch :id fee-id))
                       {:sequence/jurisdiction jurisdiction :sequence/next next-n}
-                      {:payment/seq (count (payment-history s)) :payment/record (enc (get result "record"))}])
+                      {:payment/seq (count (payment-history s)) :payment/record (ls/enc (get result "record"))}])
         result)
 
       :contract/mark-executed
@@ -333,12 +329,12 @@
         (d/transact! conn
                      [(property->tx (assoc property-patch :id property-id))
                       {:contract-sequence/jurisdiction jurisdiction :contract-sequence/next next-n}
-                      {:contract/seq (count (contract-history s)) :contract/record (enc (get result "record"))}])
+                      {:contract/seq (count (contract-history s)) :contract/record (ls/enc (get result "record"))}])
         result)
       nil)
     s)
   (append-ledger! [s fact]
-    (d/transact! conn [{:ledger/seq (count (ledger s)) :ledger/fact (enc fact)}])
+    (d/transact! conn [{:ledger/seq (count (ledger s)) :ledger/fact (ls/enc fact)}])
     fact)
   (with-properties [s properties]
     (when (seq properties) (d/transact! conn (mapv property->tx (vals properties)))) s))
