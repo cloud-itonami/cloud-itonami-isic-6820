@@ -157,8 +157,74 @@ actors have toward `kotoba-lang/insurance`.
 | `src/realty/governor.cljc` | **Real-Estate Fee-Services Governor** -- 7 HARD checks (spec-basis · evidence-incomplete · property-not-under-management · fee-missing · fee-calculation-mismatch, independent EXACT-match recompute · contract-missing · contract-exceeds-authorization, static cap) + double-payment guard + 1 soft (confidence/actuation gate) |
 | `src/realty/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted assess → supervised (payment/execution always human; property intake + fee filing auto-eligible, no capital risk) |
 | `src/realty/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
+| `src/realty/observation.cljc` | **Observation contract** (`fee-observation/1`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
 | `src/realty/sim.cljc` | demo driver |
-| `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage |
+| `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage · observation contract |
+
+## The observation contract (`fee-observation/1`)
+
+`realty.observation` is the actor's **observation layer**: how a reading of
+an OFFICIAL source (a jurisdiction's property-management / real-estate
+regulator, a government portal) becomes a provenance-preserving,
+re-observable claim about the **published** property-management
+requirements and fee-disclosure facts this actor's `realty.facts` catalog
+seeds -- and what such a claim can never become. It is deliberately
+SEPARATE from `realty.registry` (the actor's own fee-payment and
+contract-execution drafts): drafts are what this actor prepares under a
+human gate; observations are what external official sources publish. An
+observation is never a fee payment, never a contract execution, and never
+feeds back into a payment or execution decision.
+
+One contract, twelve parts: **source receipts** (frozen, content-hash
+addressed, id derived from hash + observed-at; an edited receipt is
+refused, not re-branded) · **typed subject + events** (one subject: a
+jurisdiction's PUBLISHED requirement set, keyed exactly as `realty.facts`
+keys it — national `JPN`/`GBR`/`DEU` and sub-national exemplar `USA-NY`
+alike — under a declared scope that may never be re-scoped later; typed
+publication acts only (requirement revised, fee schedule republished,
+trust-account rule amended, CMP scheme membership changed, disclosure form
+reissued), so a rent change or a listing is not an observable event here;
+party data and addresses are refused BY CONSTRUCTION) · **measurement
+window** (every observation states `{:from :to}`, events must be asserted
+inside it) · **currency basis** (a disclosed-fee figure carries ISO-4217
+currency + its own nominal date + the verbatim raw transcription; nothing
+is normalized, converted or combined) · **method / version**
+(`fee-observation/1` on every artifact; no model anywhere) ·
+**missingness / coverage** (closed flag vocabulary; a jurisdiction without
+a `realty.facts` spec-basis must carry `:jurisdiction-spec-basis-absent`,
+a republished fee schedule with no fee figure must carry
+`:fee-schedule-unavailable` — silence would claim completeness) ·
+**derived observations** (`window-observation` and `coverage-observation`:
+COUNTS and verbatim publication references only — never a fee, a trend, a
+score or a market measure) · **refresh history** (append-only lineage via
+`:obs/refresh-of`, cross-subject links refused at append time;
+`refresh-delta` carries added / removed / changed figures and events IN
+FULL on both sides plus gap movement and both generations' receipt ids,
+and computes no numeric difference anywhere) · **Hyakka proposal**
+(`hyakka-proposal` builds the claim SHAPE for the `fudosan` corpus —
+receipts, verbatim values, bases, gaps, the scope's epistemic and privacy
+boundaries, `:no-model true`; prop names are contract-local and flagged
+unregistered; this contract transmits nothing anywhere) · **query /
+readback** (`readback` revalidates everything it returns and refuses
+tampered receipts; a miss is a miss, never a default; `readback-chain`
+walks the full lineage oldest-first, refusing truncated, cyclic or
+cross-subject chains) · **history discipline** (duplicate ids refused; a
+national key is not a sub-national exemplar — re-scoping a jurisdiction
+key is refused) · **refusals** (49 loud `:refusal/code` failures instead
+of quiet degradation).
+
+WHAT THIS CONTRACT NEVER PRODUCES: a valuation, a market score, a ranking
+of properties / neighbourhoods / jurisdictions / managers, an eligibility
+conclusion about any person (published requirement conditions are
+observations, never adjudications), a fee that anyone should pay, or
+investment advice of any kind. Published fee schedules and requirement
+texts are observations of what a source disclosed — not what any
+management fee should be, not an offer, and not an endorsement of any
+manager or scheme.
+
+Deterministic contract tests: `test/realty/observation_test.clj` -- 35
+tests over synthetic fixtures only (marked as such; the receipt URLs are
+the catalog's own provenance citations; no network, no I/O, no model).
 
 ## Business-process coverage (honest)
 
