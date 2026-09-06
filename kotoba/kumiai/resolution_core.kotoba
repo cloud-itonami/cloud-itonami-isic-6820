@@ -1,0 +1,86 @@
+(ns kotoba.kumiai.resolution-core
+  ;; The judgement at the centre of the 管理組合 actor, in Kotoba.
+  ;;
+  ;; `realty.kumiai.resolution` answers one question for six jurisdictions:
+  ;; did this resolution pass, and against which denominator. The arithmetic
+  ;; that answers it is exact integer cross-multiplication -- no floating
+  ;; point, no rounding -- which is precisely what this language admits, and
+  ;; the reason a wrong answer here is a wrong answer about somebody's
+  ;; building.
+  ;;
+  ;;   axis-met       n/base against numer/denom, strictly or inclusively
+  ;;   axis-boundary  the tally that sits EXACTLY on the line
+  ;;   axis-required  the smallest tally that clears it
+  ;;   judge-1/2/3    quorum and notice and the axes, folded into a verdict
+  ;;
+  ;; == Why the axes are parameters and not a vector ==
+  ;;
+  ;; MEASURED 2026-09-06, not assumed. `[:vector :i64]` is rejected
+  ;; ("heterogeneous vector types must be a bounded vector"); the admitted
+  ;; bounded vector is the dedicated `vector-i64` / `vector-at` family, which
+  ;; carries i64 and not records. A vector OF RECORDS -- which is what a
+  ;; general fold over axes needs -- is not admitted today, so the fold is
+  ;; written as `judge-1` / `judge-2` / `judge-3` instead.
+  ;;
+  ;; That is a backend gap, not a shape this domain wants: every rule in
+  ;; `realty.kumiai.facts` counts one, two or three axes and no more (the two
+  ;; Japanese land-sale resolutions are the only three-axis ones), so the
+  ;; three entry points cover the catalog exactly. REMOVE THEM the day a
+  ;; vector of records is admitted; the bodies collapse into one fold and
+  ;; nothing else changes.
+  ;;
+  ;; == What is deliberately NOT here ==
+  ;;
+  ;; Validation and `explain` stay on the host. Validation refuses
+  ;; structurally impossible tallies by THROWING, and `throw` is permanently
+  ;; outside this language (ADR-2608650000: untracked control effects);
+  ;; moving it means returning `[:result T E]`, which is a real change to the
+  ;; caller and belongs in its own slice rather than smuggled into this one.
+  ;; `explain` builds a Japanese sentence with `str/join`, and the string
+  ;; surface here is byte-addressed.
+  (:export [axis-met axis-boundary axis-required judge-1 judge-2 judge-3]))
+
+;; --- one axis -------------------------------------------------------------
+
+(defn axis-met [n :i64 base :i64 numer :i64 denom :i64 strict :bool] :bool
+  ;; `過半数` / `Mehrheit` / `majorité` is strict; `N分のM以上` /
+  ;; `mindestens` / `au moins` is inclusive. Cross-multiplied, so two thirds
+  ;; of 99 is exact rather than a float that rounds.
+  (let [lhs (* n denom)
+        rhs (* base numer)]
+    (if strict (> lhs rhs) (>= lhs rhs))))
+
+(defn axis-boundary [n :i64 base :i64 numer :i64 denom :i64] :bool
+  ;; Exactly on the line: passes an inclusive rule and fails a strict one by
+  ;; a single vote, so a human is asked to look either way.
+  (= (* n denom) (* base numer)))
+
+(defn axis-required [base :i64 numer :i64 denom :i64 strict :bool] :i64
+  ;; The smallest whole tally that clears the bar. Integer arithmetic only:
+  ;; `quot` then a correction, rather than a ceiling on a division that was
+  ;; never exact.
+  (let [q (quot (* base numer) denom)
+        exact (= (* q denom) (* base numer))]
+    (if strict
+      (+ q 1)
+      (if exact q (+ q 1)))))
+
+;; --- the whole resolution -------------------------------------------------
+;;
+;; quorum-met and notice-met are computed by the caller and passed in as the
+;; facts they are: a quorum may be conjunctive (JPN 第17条第1項) or
+;; disjunctive (NSW Schedule 1 clause 17(2)), and a notice period is a date
+;; arithmetic question (SGP s 2(2)(a)). Neither is a property of the tally.
+
+(defn judge-1 [quorum-met :bool notice-met :bool a1 :bool] :bool
+  (if quorum-met (if notice-met a1 false) false))
+
+(defn judge-2 [quorum-met :bool notice-met :bool a1 :bool a2 :bool] :bool
+  (if quorum-met (if notice-met (if a1 a2 false) false) false))
+
+(defn judge-3 [quorum-met :bool notice-met :bool a1 :bool a2 :bool a3 :bool] :bool
+  (if quorum-met
+    (if notice-met
+      (if a1 (if a2 a3 false) false)
+      false)
+    false))
