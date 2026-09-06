@@ -243,6 +243,7 @@ actors have toward `kotoba-lang/insurance`.
 | `src/realty/kumiai/phase.cljc` | **Phase 0→3** -- works commissioning and resolution filing never auto-commit at any phase |
 | `src/realty/kumiai/operation.cljc` | **OperationActor** (kumiai) -- langgraph-clj StateGraph |
 | `src/realty/kumiai/sim.cljc` | 管理組合 demo driver |
+| `kotoba/kumiai/works_core.kotoba` | **The commissioning step as `state + event -> next state + an inert effect`** — the four grounds the governor holds a works order on, decided in the same order, the outcome carrying the reason. Qualified on `wasm32-browser`; **native is blocked** by kotoba-lang/amu#835 |
 | `kotoba/kumiai/resolution_core.kotoba` | **The judgement core in Kotoba** — exact cross-multiplied comparison, the exact-boundary flag, the smallest clearing tally, the quorum/notice/axes fold, and a `main` that re-derives the six statutes' boundaries and returns the failure COUNT. Builds to `aarch64-macos` and `wasm32-browser` with no capabilities and no JDK |
 | `scripts/kotoba_native_acceptance.cljs` | The JVM-free gate: builds with `amu --jvm-free` under a JDK-denying PATH, runs the guest through the native loader, compares it against the `.cljc` oracle on nbb, and fails if any JDK binary was invoked |
 | `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage · observation contract |
@@ -526,6 +527,51 @@ exit 2, which is neither.
 `main` returns a COUNT rather than a boolean on purpose: a self-check
 that can only say "something failed" cannot tell one regression from a
 broken build.
+
+### A second slice: commissioning, and what it found
+
+`kotoba/kumiai/works_core.kotoba` is the step where the association signs
+a real contract and pays for it out of other owners' contributions. It is
+product semantics rather than a decision core — `state + event -> next
+state + an inert effect` — and it never writes: the outcome names the
+effect (`:effect/draft-works-order`), its value, and whether the pending
+package should be cleared. The host performs it.
+
+It exists to test the claim this README was making. If the component were
+blocked by atoms and protocols, this could not be written. It is blocked
+by the **effects**, so the part that is not an effect moved and the ledger
+write stayed.
+
+**Qualified on `wasm32-browser`, BLOCKED on native**, and the reason is
+worth stating exactly: the module compiles to `aarch64-macos`, runs
+there, and gives the **wrong answer**, because keyword equality on that
+backend is always false.
+
+| | expected | `wasm32-browser` | `aarch64-macos` |
+|---|---|---|---|
+| `(if (= :passed :passed) 1 0)` | 1 | 1 | **0** |
+| `(if (= :passed :failed) 1 0)` | 0 | 0 | 0 |
+| `(if (= 7 7) 1 0)` | 1 | 1 | 1 |
+
+i64 equality is correct on the same build, so it is neither the `if`
+lowering nor the loader. Reported as **kotoba-lang/amu#835**. Every branch
+in this module turns on a keyword, so on native every one took the wrong
+path — `main` returned 10 failures out of 11 the first time, and that
+count is the only reason it was caught rather than shipped.
+
+The status is **not** re-modelled as an integer to get past it. Q9 says an
+unsupported target is blocked rather than a reason to fall back, and
+reshaping the domain around a backend defect hides it. The removal
+condition is mechanised rather than remembered: the acceptance script
+probes for the defect and **fails when it stops reproducing**, so the
+block is lifted by a test going red.
+
+**The self-check had a hole, found the same way.** Flipping the budget
+comparison from `>` to `>=` left it green, because no case sat exactly at
+the voted budget — without one the two operators are indistinguishable.
+With `contract-value = budget` added (which must be ADMITTED, the rule
+being "exceeds"), the flip turns it red. A table without its boundaries
+cannot see the operator.
 
 ### The reserve benchmark stays Japanese
 
