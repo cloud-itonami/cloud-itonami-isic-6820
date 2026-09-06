@@ -99,6 +99,8 @@
 ;;                  A claimed non-statutory threshold with no recorded
 ;;                  bylaw provision is a HARD violation, not a default.
 
+(def ^:private none {:numer 0 :denom 1})
+(def ^:private one-quarter {:numer 1 :denom 4})
 (def ^:private one-third {:numer 1 :denom 3})
 (def ^:private half {:numer 1 :denom 2})
 (def ^:private three-fifths {:numer 3 :denom 5})
@@ -513,6 +515,83 @@
     :bylaw :none
     :note "投票ではなく、12週間後の時点の全区分所有者による書面での支持。"}})
 
+(def nsw-resolutions
+  "Transcribed from the current text of the Strata Schemes Management
+  Act 2015 (NSW), section 5, on legislation.nsw.gov.au.
+
+  New South Wales sets its thresholds on the OPPOSITION. s 5(1): a
+  resolution is special if, `of the value of votes cast`, `not more
+  than 25% are against` -- and s 5(3): unanimous if `no vote is cast
+  against`. Neither sentence mentions the votes in favour. Restating
+  them as `at least 75% for` is algebra that holds only while every
+  vote cast is either for or against, which is an assumption about the
+  ballot and not something the statute says, so these are measured
+  where the statute measures them.
+
+  Two subject-matter variants relax the cap rather than the base: a
+  sustainability infrastructure resolution and an accessibility
+  infrastructure resolution each pass while `less than 50%` are
+  against -- note LESS THAN, not `not more than`, so exactly half fails
+  where exactly a quarter would have passed.
+
+  == What is deliberately NOT here ==
+
+  The ORDINARY resolution. s 5 carries a Note saying a motion not
+  requiring a special or unanimous resolution `is passed by a simple
+  majority of votes (see clause 14 of Schedule 1)`. A Note is not the
+  operative provision, and clause 14 of Schedule 1 was not read. So
+  there is no `:ordinary` entry and `resolution-rule` returns nil for
+  it: the governor holds, exactly as it does for a jurisdiction with no
+  table at all. A partially read statute yields a partial table, not a
+  guessed one.
+
+  == Vote values are taken as given ==
+
+  s 5(2) sets the value of a vote for a lot to its unit entitlement,
+  and s 5(2A) REDUCES an original owner`s vote value by two thirds when
+  their entitlement is at least half the aggregate and the scheme has
+  more than two lots. That reduction is a fact about who cast which
+  vote, so this actor takes the already-valued tallies it is given --
+  the same posture as Singapore s 2(8) valid-vote definition."
+  {:special
+   {:label "Special resolution"
+    :article "Strata Schemes Management Act 2015 (NSW), section 5(1)(b)(i)"
+    :base :cast :quorum nil
+    :axes [{:axis :unit-entitlement :base :cast
+            :fraction one-quarter :comparison :opposition-at-most}]
+    :fraction one-quarter :comparison :opposition-at-most
+    :bylaw :none
+    :note "反対が投票価値の25%を超えないこと。賛成票は条文に現れない。値は unit entitlement (s 5(2))。"}
+
+   :special-sustainability-infrastructure
+   {:label "Special resolution -- sustainability infrastructure"
+    :article "Strata Schemes Management Act 2015 (NSW), section 5(1)(b)(ii)"
+    :base :cast :quorum nil
+    :axes [{:axis :unit-entitlement :base :cast
+            :fraction half :comparison :opposition-less-than}]
+    :fraction half :comparison :opposition-less-than
+    :bylaw :none
+    :note "`less than 50%` —— ちょうど50%は否決。s 5(1)(b)(i) の `not more than 25%` とは境界の向きが違う。"}
+
+   :special-accessibility-infrastructure
+   {:label "Special resolution -- accessibility infrastructure"
+    :article "Strata Schemes Management Act 2015 (NSW), section 5(1)(b)(iii)"
+    :base :cast :quorum nil
+    :axes [{:axis :unit-entitlement :base :cast
+            :fraction half :comparison :opposition-less-than}]
+    :fraction half :comparison :opposition-less-than
+    :bylaw :none}
+
+   :unanimous
+   {:label "Unanimous resolution"
+    :article "Strata Schemes Management Act 2015 (NSW), section 5(3)"
+    :base :cast :quorum nil
+    :axes [{:axis :unit-entitlement :base :cast
+            :fraction none :comparison :opposition-at-most}]
+    :fraction none :comparison :opposition-at-most
+    :bylaw :none
+    :note "`no vote is cast against`。全員賛成ではなく、反対が1票も無いこと —— 棄権は妨げない。"}})
+
 ;; --------------------------------------------------------------------
 ;; reserve-fund guidance
 ;; --------------------------------------------------------------------
@@ -695,18 +774,20 @@
    "AUS-NSW"
    {:name "Australia -- New South Wales (exemplar; strata law is per-state)"
     :owner-authority "NSW Fair Trading / NSW Civil and Administrative Tribunal"
-    :legal-basis-unverified "Strata Schemes Management Act 2015 (NSW)"
-    :provenance "https://legislation.nsw.gov.au/view/html/inforce/current/act-2015-050"
-    :verified-on nil
-    :unverified-reason :source-behind-bot-challenge
-    :source-attempt {:on "2026-09-06" :status 403
-                     :challenge :cloudflare-interstitial
-                     :note "legislation.nsw.gov.au は HTML / PDF / 内部 API のいずれも 403 を返し、本文は Cloudflare の `Just a moment...` チャレンジだった。**これを回避しない** —— bot 検出の回避はこのワークスペースの安全床が禁じている。公式 API か官報の別配布経路が要る。"}
+    :legal-basis "Strata Schemes Management Act 2015 (NSW), section 5"
+    :provenance "https://legislation.nsw.gov.au/view/whole/html/inforce/current/act-2015-050"
+    :verified-on "2026-09-06"
+    :resolutions nsw-resolutions
+    :partial? true
     :required-evidence ["Strata by-laws"
                         "Capital works fund plan (10-year)"
                         "Capital works fund account"
                         "Minutes of the general meeting"
-                        "Quantity surveyor's estimate"]}
+                        "Quantity surveyor estimate"]
+    :notes ["The ORDINARY resolution is absent on purpose. s 5 Note points at clause 14 of Schedule 1 for the simple majority; a Note is not the operative provision, and that clause was not read. `resolution-rule` therefore returns nil for :ordinary and the governor holds -- a partially read statute yields a partial table, not a guessed one."
+            "Access to this source is INTERMITTENT. legislation.nsw.gov.au answers curl with a Cloudflare interstitial, answered a plain urllib GET with the full text on 2026-09-06, and refused an identical request minutes later. Nothing was done to defeat the challenge: the readable response arrived without one. `scripts/hermes-kumiai-sources` re-probes it, and the rule stands that no entry may be moved on a body obtained by defeating a challenge."
+            "s 5(2A) reduces an original owner vote value by two thirds in the stated circumstances. Applying that reduction is the caller job; this actor takes the valued tallies as given."
+            "There is no statutory per-square-metre capital-works benchmark comparable to the Japanese one, so this entry carries no :reserve-guideline."]}
 
    "ITA"
    {:name "Italy"

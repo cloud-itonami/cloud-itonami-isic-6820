@@ -222,11 +222,11 @@
 ;; ----------------------------- refusals -----------------------------
 
 (deftest a-jurisdiction-whose-source-was-unreachable-still-refuses-to-answer
-  ;; These three DO have statutory thresholds. Not having read them is
-  ;; not a licence to guess. (Singapore was in this list until its
-  ;; primary source was reached; the entry moved rather than the rule
-  ;; being relaxed.)
-  (doseq [j ["AUS-NSW" "ITA" "CHN"]]
+  ;; These two DO have statutory thresholds. Not having read them is
+  ;; not a licence to guess. (Singapore and New South Wales were both in
+  ;; this list until their primary sources were reached; the entries
+  ;; moved rather than the rule being relaxed.)
+  (doseq [j ["ITA" "CHN"]]
     (is (nil? (facts/resolution-rule j :ordinary)) j)
     (is (thrown? Exception (r/tally (facts/resolution-rule j :ordinary) shared-ballot)) j)))
 
@@ -350,3 +350,59 @@
                    (merge sgp-base {:in-favour {:share-value 9000}}))]
     (is (true? (:passed? v)))
     (is (= 10000 (:base (first (:axes v)))) "measured against every proprietor, not the meeting")))
+
+;; ----------------------------- AUS-NSW -----------------------------
+
+(def ^:private nsw-base
+  {:total {:unit-entitlement 10000}
+   :attending {:unit-entitlement 6000}
+   :cast {:unit-entitlement 4000}})
+
+(deftest nsw-measures-the-opposition-not-the-support
+  ;; s 5(1)(b)(i): not more than 25% of the value of votes cast against.
+  ;; 1,000 of 4,000 is exactly 25% and passes; 1,001 does not. The votes
+  ;; IN FAVOUR are not supplied at all -- the statute does not mention
+  ;; them, and the rule must not require them.
+  (let [rule (facts/resolution-rule "AUS-NSW" :special)
+        v (r/tally rule (merge nsw-base {:against {:unit-entitlement 1000}}))]
+    (is (true? (:passed? v)))
+    (is (true? (:on-boundary? v)) "exactly a quarter is exactly on the cap")
+    (is (= 1000.0 (:max-opposition (first (:axes v)))))
+    (is (nil? (:in-favour (first (:axes v)))))
+    (is (false? (:passed? (r/tally rule (merge nsw-base {:against {:unit-entitlement 1001}})))))))
+
+(deftest nsw-refuses-to-decide-without-the-votes-against
+  (is (thrown? Exception
+               (r/tally (facts/resolution-rule "AUS-NSW" :special)
+                        (merge nsw-base {:in-favour {:unit-entitlement 3000}})))))
+
+(deftest nsw-infrastructure-variants-move-the-cap-and-the-boundary
+  ;; `less than 50%`, not `not more than 50%`: exactly half FAILS here,
+  ;; where exactly a quarter passed above. Same ballot, three answers.
+  (let [half-against (merge nsw-base {:against {:unit-entitlement 2000}})]
+    (is (false? (:passed? (r/tally (facts/resolution-rule "AUS-NSW" :special) half-against))))
+    (is (false? (:passed? (r/tally (facts/resolution-rule "AUS-NSW" :special-sustainability-infrastructure)
+                                   half-against)))
+        "exactly 50% is not LESS than 50%")
+    (is (true? (:passed? (r/tally (facts/resolution-rule "AUS-NSW" :special-sustainability-infrastructure)
+                                  (merge nsw-base {:against {:unit-entitlement 1999}})))))
+    (is (true? (:passed? (r/tally (facts/resolution-rule "AUS-NSW" :special-accessibility-infrastructure)
+                                  (merge nsw-base {:against {:unit-entitlement 1999}})))))))
+
+(deftest nsw-unanimous-means-no-vote-against-not-every-vote-in-favour
+  ;; s 5(3). An abstention does not defeat it; a single vote against
+  ;; does. This is a different rule from Singapore's unanimous
+  ;; resolution, which requires every valid vote cast to support it.
+  (let [rule (facts/resolution-rule "AUS-NSW" :unanimous)]
+    (is (true? (:passed? (r/tally rule (merge nsw-base {:against {:unit-entitlement 0}})))))
+    (is (false? (:passed? (r/tally rule (merge nsw-base {:against {:unit-entitlement 1}})))))
+    (testing "and Singapore's version of the same word is measured on the support"
+      (is (= :at-least (:comparison (facts/resolution-rule "SGP" :unanimous))))
+      (is (= :opposition-at-most (:comparison rule))))))
+
+(deftest nsw-explains-itself-in-terms-of-the-cap
+  (let [line (r/explain (r/tally (facts/resolution-rule "AUS-NSW" :special)
+                                 (merge nsw-base {:against {:unit-entitlement 900}})))]
+    (is (re-find #"反対" line))
+    (is (re-find #"上限" line))
+    (is (re-find #"1/4以下" line))))

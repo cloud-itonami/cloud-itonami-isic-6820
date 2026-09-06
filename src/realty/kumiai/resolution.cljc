@@ -52,7 +52,18 @@
      here, and the invented one would disagree with the statute as soon
      as anyone abstained.
 
-  6. A NOTICE PERIOD CAN BE PART OF THE DEFINITION, not evidence
+  6. A THRESHOLD CAN BE SET ON THE OPPOSITION. New South Wales defines
+     a special resolution as one where, of the value of votes cast,
+     `not more than 25% are against` (Strata Schemes Management Act
+     2015, s 5(1)) -- and a unanimous resolution as one where `no vote
+     is cast against`. Nothing in either sentence mentions the votes in
+     favour. Rewriting them as `at least 75% for` is algebra that holds
+     only while every vote cast is either for or against, which is an
+     assumption about the ballot and not something the statute says. So
+     these are measured on the AGAINST tally, and the verdict reports
+     the maximum opposition the rule allowed.
+
+  7. A NOTICE PERIOD CAN BE PART OF THE DEFINITION, not evidence
      around it. The same Singapore section says a motion `is decided by
      ordinary resolution IF (a) the motion is passed at a duly convened
      general meeting held on the 15th day (or later) after the notice
@@ -61,7 +72,7 @@
      resolution at all. So `:notice-days` is checked here and lands in
      `:passed?`, rather than being left to the evidence checklist.
 
-  7. SOME STATUTES PROVIDE A FALLBACK. France's article 25-1 lets an
+  8. SOME STATUTES PROVIDE A FALLBACK. France's article 25-1 lets an
      assembly that failed the article 25 majority, but reached at least
      a third of all owners' votes, vote AGAIN immediately at the
      article 24 majority. That is a second ballot, not an arithmetic
@@ -236,25 +247,29 @@
                            "so :notice-days-elapsed is required")
                       {:article (:article rule) :notice-days (:notice-days rule)})))
     (doseq [{:keys [axis comparison]} axes]
-      (when (and (= :more-than-opposed (or comparison (:comparison rule)))
+      (when (and (contains? #{:more-than-opposed :opposition-at-most :opposition-less-than}
+                            (or comparison (:comparison rule)))
                  (nil? (get against axis)))
-        (throw (ex-info (str "resolution: this rule compares votes for against votes against, "
+        (throw (ex-info (str "resolution: this rule is decided on the votes AGAINST, "
                              "so :against is required on axis " axis)
                         {:axis axis :article (:article rule)}))))
-    (doseq [{:keys [axis base]} axes]
-      (let [t (get total axis) f (get in-favour axis) b (get (get counts base) axis)]
+    (doseq [{:keys [axis base comparison]} axes]
+      (let [t (get total axis) f (get in-favour axis) b (get (get counts base) axis)
+            opposition? (contains? #{:opposition-at-most :opposition-less-than}
+                                   (or comparison (:comparison rule)))]
         (when (nil? t) (throw (ex-info (str "resolution: total is missing axis " axis) {:axis axis})))
         (when (nil? b) (throw (ex-info (str "resolution: " (name base) " is missing axis " axis)
                                        {:axis axis :base base})))
-        (when (nil? f) (throw (ex-info (str "resolution: in-favour is missing axis " axis) {:axis axis})))
+        (when (and (nil? f) (not opposition?))
+          (throw (ex-info (str "resolution: in-favour is missing axis " axis) {:axis axis})))
         (when (neg? (double t)) (throw (ex-info "resolution: counts must be >= 0" {:axis axis})))
         (when (> (double b) (double t))
           (throw (ex-info (str "resolution: " (name base) " exceeds total on axis " axis) {:axis axis})))
-        (when (> (double f) (double b))
+        (when (and f (> (double f) (double b)))
           (throw (ex-info (str "resolution: in-favour exceeds the " (name base) " base on axis " axis)
                           {:axis axis :base base})))
         (when-let [ag (get against axis)]
-          (when (> (+ (double f) (double ag)) (double b))
+          (when (> (+ (double (or f 0)) (double ag)) (double b))
             (throw (ex-info (str "resolution: for + against exceeds the " (name base)
                                  " base on axis " axis)
                             {:axis axis :base base}))))))
@@ -297,6 +312,24 @@
   differently."
   [{:keys [axis base fraction comparison]} base-count in-favour against]
   (let [integral? (contains? integral-axes axis)]
+    (if (contains? #{:opposition-at-most :opposition-less-than} comparison)
+      ;; Measured on the AGAINST tally. `:in-favour` is carried for the
+      ;; record but takes no part in the verdict -- the statute does not
+      ;; mention it, and inferring it would be arithmetic the law did
+      ;; not authorise.
+      (let [ag (double (or against 0))
+            cap (/ (* (double base-count) (:numer fraction)) (:denom fraction))]
+        {:axis axis
+         :counted-against base
+         :base base-count
+         :in-favour in-favour
+         :opposed against
+         :fraction fraction
+         :comparison comparison
+         :max-opposition cap
+         :required nil
+         :met? (if (= :opposition-at-most comparison) (<= ag cap) (< ag cap))
+         :on-boundary? (== ag cap)})
     (if (= :more-than-opposed comparison)
       (let [a (double (or against 0))]
         {:axis axis
@@ -317,7 +350,7 @@
        :comparison comparison
        :required (required base-count fraction comparison integral?)
        :met? (meets? in-favour base-count fraction comparison)
-       :on-boundary? (on-boundary? in-favour base-count fraction)})))
+       :on-boundary? (on-boundary? in-favour base-count fraction)}))))
 
 ;; ----------------------------- tally -----------------------------
 
@@ -432,6 +465,13 @@
                          (if (:met? notice) "○" "×")))
        " / 軸: "
        (str/join "、" (map (fn [a]
+                             (if (contains? #{:opposition-at-most :opposition-less-than} (:comparison a))
+                               (str (name (:axis a)) " 反対 " (:opposed a) "/" (:base a)
+                                    " [" (get base-label (:counted-against a) "?") "]"
+                                    " 上限 " (:max-opposition a)
+                                    " (" (:numer (:fraction a)) "/" (:denom (:fraction a))
+                                    (if (= :opposition-at-most (:comparison a)) "以下" "未満") ")"
+                                    " " (if (:met? a) "○" "×"))
                              (if (= :more-than-opposed (:comparison a))
                                (str (name (:axis a)) " 賛成 " (:in-favour a)
                                     " 対 反対 " (:opposed a)
@@ -440,7 +480,7 @@
                                     " [" (get base-label (:counted-against a) "?") "]"
                                     " 要 " (:required a)
                                     " (" (:numer (:fraction a)) "/" (:denom (:fraction a)) ")"
-                                    " " (if (:met? a) "○" "×"))))
+                                    " " (if (:met? a) "○" "×")))))
                            axes))
        " => " (if passed? "可決" "否決")
        (when on-boundary? " [要件ちょうどの軸あり -- 人的確認を推奨]")
