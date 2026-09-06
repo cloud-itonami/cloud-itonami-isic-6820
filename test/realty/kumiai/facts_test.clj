@@ -9,7 +9,7 @@
   ;; breaks a test rather than passing one.
   (let [c (f/coverage)]
     (is (= (count f/catalog) (:covered c)))
-    (is (= ["DEU" "ESP" "FRA" "JPN" "SGP"] (:with-statutory-resolution-thresholds c)))
+    (is (= ["AUS-NSW" "DEU" "ESP" "FRA" "JPN" "SGP"] (:with-statutory-resolution-thresholds c)))
     (is (< (count (:with-statutory-resolution-thresholds c)) (:covered c)))))
 
 (deftest coverage-splits-unreadable-from-nonexistent
@@ -20,7 +20,7 @@
   ;; that reading harder cannot help, which is false for four of them.
   (let [c (f/coverage)
         by (:without-thresholds-by-reason c)]
-    (is (= ["AUS-NSW" "CHN" "ITA"] (:unreadable-sources c)))
+    (is (= ["CHN" "ITA"] (:unreadable-sources c)))
     (is (= ["USA-NY"] (:no-statutory-threshold-table by)))
     (is (= ["GBR"] (:no-unit-owner-vote by)))
     (is (not-any? #{:unstated} (keys by)))))
@@ -28,7 +28,7 @@
 (deftest an-unreadable-source-records-the-attempt-not-a-guess
   ;; A remembered threshold and a fetched one must not be storable in
   ;; the same field, so the unverified entries use a DIFFERENT key.
-  (doseq [j ["AUS-NSW" "ITA" "CHN"]]
+  (doseq [j ["ITA" "CHN"]]
     (let [b (f/spec-basis j)]
       (is (nil? (:legal-basis b)) j)
       (is (some? (:legal-basis-unverified b)) j)
@@ -36,15 +36,16 @@
       (is (some? (get-in b [:source-attempt :status])) j)
       (is (= "2026-09-06" (get-in b [:source-attempt :on])) j))))
 
-(deftest a-bot-challenge-is-recorded-as-a-decision-not-a-gap
-  ;; NSW is unverified because defeating a bot-detection interstitial is
-  ;; something this workspace does not do -- not because nobody tried.
-  ;; The reason keyword is separate so the two never collapse.
-  (let [b (f/spec-basis "AUS-NSW")]
-    (is (= :source-behind-bot-challenge (:unverified-reason b)))
-    (is (= :cloudflare-interstitial (get-in b [:source-attempt :challenge])))
-    (is (nil? (:resolutions b))))
-  (is (not= (f/unverified-reason "AUS-NSW") (f/unverified-reason "ITA"))))
+(deftest a-partially-read-statute-yields-a-partial-table-not-a-guessed-one
+  ;; NSW s 5 was read; clause 14 of Schedule 1 was not. So the special
+  ;; and unanimous rules are present and the ordinary one is absent, and
+  ;; the governor holds on the absent one exactly as it would for a
+  ;; jurisdiction with no table at all.
+  (is (some? (f/resolution-rule "AUS-NSW" :special)))
+  (is (some? (f/resolution-rule "AUS-NSW" :unanimous)))
+  (is (nil? (f/resolution-rule "AUS-NSW" :ordinary)))
+  (is (true? (:partial? (f/spec-basis "AUS-NSW"))))
+  (is (nil? (f/unverified-reason "AUS-NSW"))))
 
 (deftest a-two-hundred-response-is-not-a-successful-read
   ;; ITA and CHN answered 200 with a navigation frame and a news page.
@@ -63,7 +64,7 @@
   (is (some? (f/spec-basis "USA-NY")))
   (is (nil? (f/resolution-rule "USA-NY" :ordinary)))
   (is (nil? (f/resolution-rule "GBR" :common-area-major-change)))
-  (is (nil? (f/resolution-rule "AUS-NSW" :ordinary))))
+  (is (nil? (f/resolution-rule "CHN" :ordinary))))
 
 (deftest only-japan-carries-a-reserve-benchmark
   ;; The MLIT bands are Japanese and apply nowhere else. Germany's
@@ -71,7 +72,7 @@
   ;; reserva is a percentage of the budget rather than a rate per square
   ;; metre, and France's fonds de travaux publishes no scale.
   (is (some? (f/reserve-guideline "JPN")))
-  (doseq [j ["DEU" "ESP" "FRA" "USA-NY" "GBR" "SGP"]]
+  (doseq [j ["DEU" "ESP" "FRA" "USA-NY" "GBR" "SGP" "AUS-NSW"]]
     (is (nil? (f/reserve-guideline j)) j)))
 
 (deftest japanese-rules-carry-the-denominator-the-statute-counts
@@ -132,6 +133,5 @@
   (is (re-find #"規約/宣言に依る" (f/jurisdiction-summary "USA-NY")))
   (is (re-find #"leasehold" (f/jurisdiction-summary "GBR")))
   (is (re-find #"一次資料を取得できていない" (f/jurisdiction-summary "ITA")))
-  (is (re-find #"bot 検出の背後" (f/jurisdiction-summary "AUS-NSW")))
   (is (re-find #"決議要件 7 種" (f/jurisdiction-summary "SGP")))
   (is (re-find #"NO SPEC-BASIS" (f/jurisdiction-summary "ATL"))))

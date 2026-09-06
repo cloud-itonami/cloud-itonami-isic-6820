@@ -55,7 +55,7 @@
 
     (println)
     (println "== 決議要件テーブル (一次資料から転記した4法域) ==")
-    (doseq [j ["JPN" "DEU" "ESP" "FRA" "SGP"]]
+    (doseq [j ["JPN" "DEU" "ESP" "FRA" "SGP" "AUS-NSW"]]
       (println (str "  -- " j " (" (:legal-basis (facts/spec-basis j)) ") --"))
       (doseq [[k rule] (sort-by key (:resolutions (facts/spec-basis j)))]
         (println "   " k "->" (facts/rule-summary rule))))
@@ -108,6 +108,23 @@
           (println (str "     on a poll     -> "
                         (resolution/explain (resolution/tally
                                              (facts/resolution-rule "SGP" :ordinary-poll) ballot)))))))
+
+    (println)
+    (println "== AUS-NSW -- 閾値が反対側に置かれた規則 (賛成票は条文に現れない) ==")
+    (let [base {:total {:unit-entitlement 10000}
+                :attending {:unit-entitlement 6000}
+                :cast {:unit-entitlement 4000}}]
+      (doseq [[label against]
+              [["反対 1,000 / 投票価値 4,000 (ちょうど25%)" 1000]
+               ["反対 1,001 (25%超)" 1001]
+               ["反対 2,000 (ちょうど50%)" 2000]
+               ["反対 0" 0]]]
+        (println (str "   " label))
+        (doseq [k [:special :special-sustainability-infrastructure :unanimous]]
+          (println (str "     " (name k) " -> "
+                        (resolution/explain
+                         (resolution/tally (facts/resolution-rule "AUS-NSW" k)
+                                           (assoc base :against {:unit-entitlement against}))))))))
 
     (println)
     (println "== FRA art. 25-1 -- 否決だが3分の1に達したので、同一総会での再決議が可能 (自動可決はしない) ==")
