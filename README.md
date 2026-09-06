@@ -101,29 +101,49 @@ proposal still always routes to a human.
 
 ## Run
 
-The judgement core now has a Kotoba build, and it does not start a JVM:
+The judgement core builds and is accepted **without a JDK anywhere in the
+loop** — `kotoba compile` and `amu native`, nothing else:
 
 ```bash
-K=<workspace>/orgs/kotoba-lang/amu/bin/kotoba   # the driver; runs on nbb
-$K -M check   <abs>/kotoba/kumiai/resolution_core.kotoba
-$K -M compile <abs>/kotoba/kumiai/resolution_core.kotoba \
-      --target wasm32-browser --output <abs>/resolution_core.wasm     # JVM-free
-$K -M compile <abs>/kotoba/kumiai/resolution_core.kotoba \
-      --target js-browser     --output /tmp/kout/resolution_core.mjs  # spawns clojure
-nbb --classpath src:test test/kotoba/parity.cljs                      # 0 pass / 1 disagree / 3 skip
+nbb --classpath src:scripts scripts/kotoba_native_acceptance.cljs
 ```
 
-Absolute paths are required (a relative one fails as `input could not be
-read`), the flag is `--output` not `-o`, the targets are
-`wasm32-browser` / `js-browser` not `wasm` / `web`, and without `-M` the
-driver refuses with `compiler commands require the -M execution
-boundary`. Do not reach for `~/.local/bin/kotoba` on this machine: it is
-a two-line shim onto a deleted `/tmp` path, so `which` finds it and
-running it exits 126.
+That one command builds a directory of stub `java` / `javac` / `clojure` /
+`clj` / `jarsigner` that record every call and exit 97, puts it first on
+`PATH`, poisons `JAVA_HOME`, and then runs `amu check --jvm-free`,
+`amu compile --jvm-free` to the host native target and to
+`wasm32-browser`, `amu extract-native --symbol main`, builds the kexe
+loader with `cc`, executes the guest, and compares it against the `.cljc`
+oracle loaded by nbb. It fails if the trace file is not empty.
 
-The rest of the actor still runs on the JVM suite below; the `.cljc` is
-the oracle the Kotoba module is measured against, and it stays until the
-remaining slices move.
+    NATIVE  aarch64-macos  self-check-failures  0
+    PARITY  CASES 20       DISAGREEMENTS 0
+    JVM-INVOCATIONS 0
+    PASS    kotoba compile + amu native, oracle parity clean, no JVM
+
+Exit 0 pass · 1 fail · **2 could-not-measure** — a run that could not
+build the toolchain is not a run that found nothing wrong.
+
+**The denial is not decorative.** `amu test` is deliberately absent from
+that list: measured 2026-09-06 it routes to `clojure -M:run` and is the
+only amu subcommand that trips the trace, which is also the evidence
+that the trace detects anything at all.
+
+Run the pieces by hand with absolute paths (a relative one fails as
+`input could not be read`), `--output` rather than `-o`, targets named
+`wasm32-browser` / `aarch64-macos` rather than `wasm` / `native`, and
+`-M` present or the driver refuses with `compiler commands require the
+-M execution boundary`. Do not reach for `~/.local/bin/kotoba` on this
+machine: it is a two-line shim onto a deleted `/tmp` path, so `which`
+finds it and running it exits 126.
+
+The rest of the actor still runs on the JVM suite below. Under Q9 that
+component is **`:blocked`, not migrated**: `realty.kumiai.store`,
+`operation`, `kumiaillm` and `registry` rest on langgraph's StateGraph,
+protocols and `defrecord`, atoms and `langchain.db` — host mechanism the
+language does not admit, and Q9 does not accept a decision core as a
+migration unit. The `.cljc` suite below is the oracle, and Q9 marks a
+JVM oracle as historical and non-gating: the gate is the command above.
 
 ```bash
 clojure -M:dev:run          # fee-services actor: two clean lifecycles + seven HARD-hold cases
@@ -194,8 +214,8 @@ actors have toward `kotoba-lang/insurance`.
 | `src/realty/kumiai/phase.cljc` | **Phase 0→3** -- works commissioning and resolution filing never auto-commit at any phase |
 | `src/realty/kumiai/operation.cljc` | **OperationActor** (kumiai) -- langgraph-clj StateGraph |
 | `src/realty/kumiai/sim.cljc` | 管理組合 demo driver |
-| `kotoba/kumiai/resolution_core.kotoba` | **The judgement core in Kotoba** — exact cross-multiplied comparison, the exact-boundary flag, the smallest clearing tally, and the quorum/notice/axes fold. Compiles to wasm32-browser with no capabilities and no JVM |
-| `test/kotoba/parity.cljs` | nbb parity between the two, over every exact boundary in the six statutes. Skip (3) is a different exit code from pass (0) |
+| `kotoba/kumiai/resolution_core.kotoba` | **The judgement core in Kotoba** — exact cross-multiplied comparison, the exact-boundary flag, the smallest clearing tally, the quorum/notice/axes fold, and a `main` that re-derives the six statutes' boundaries and returns the failure COUNT. Builds to `aarch64-macos` and `wasm32-browser` with no capabilities and no JDK |
+| `scripts/kotoba_native_acceptance.cljs` | The JVM-free gate: builds with `amu --jvm-free` under a JDK-denying PATH, runs the guest through the native loader, compares it against the `.cljc` oracle on nbb, and fails if any JDK binary was invoked |
 | `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage · observation contract |
 
 ## The observation contract (`fee-observation/1`)
@@ -467,14 +487,16 @@ language — moving it means returning `[:result T E]`, a real change to
 every caller that belongs in its own slice. `explain` builds a Japanese
 sentence, and the string surface here is byte-addressed.
 
-**Parity is measured in both directions.** `test/kotoba/parity.cljs`
-runs 21 cases — every exact boundary in the six statutes, including two
-thirds of 99, which a float would round — and compares the `.cljc`
-against the compiled artifact. Flipping the single strict comparison in
-the Kotoba source from `>` to `>=` turns three of them red (the
-exactly-half cases in Japan, Germany and France) and the run exits 1; put
-back, 0 disagreements and exit 0; with no artifact built, exit **3**, so
-a skipped parity check cannot be read as a passing one.
+**Everything here is measured in both directions.** Flipping the single
+strict comparison in the Kotoba source from `>` to `>=` — turning
+`過半数` into `以上` — makes the guest's own `main` return **2** and the
+oracle parity report **2 disagreements** (the exactly-half cases), and
+the run exits 1. Put back: 0 and 0, exit 0. With the toolchain absent:
+exit 2, which is neither.
+
+`main` returns a COUNT rather than a boolean on purpose: a self-check
+that can only say "something failed" cannot tell one regression from a
+broken build.
 
 ### The reserve benchmark stays Japanese
 
