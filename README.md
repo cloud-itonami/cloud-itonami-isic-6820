@@ -138,12 +138,41 @@ machine: it is a two-line shim onto a deleted `/tmp` path, so `which`
 finds it and running it exits 126.
 
 The rest of the actor still runs on the JVM suite below. Under Q9 that
-component is **`:blocked`, not migrated**: `realty.kumiai.store`,
-`operation`, `kumiaillm` and `registry` rest on langgraph's StateGraph,
-protocols and `defrecord`, atoms and `langchain.db` — host mechanism the
-language does not admit, and Q9 does not accept a decision core as a
-migration unit. The `.cljc` suite below is the oracle, and Q9 marks a
-JVM oracle as historical and non-gating: the gate is the command above.
+component is **`:blocked`, not migrated** — but for one reason, not the
+four this paragraph used to give.
+
+**Corrected 2026-09-06.** It previously said the blockers were
+langgraph's StateGraph, protocols, `defrecord`, atoms and
+`langchain.db`. Three of those are wrong. Measured with
+`amu compile --jvm-free --target aarch64-macos`, and then RUN through
+the kexe loader rather than merely compiled:
+
+| construct | native | value returned |
+|---|---|---|
+| `atom` / `swap!` / `deref` in a `let` | admitted | 12 |
+| `defrecord` + accessor | admitted | 74 |
+| `defprotocol` + `extend-type` | admitted | 15 |
+| `fn` passed as a value | admitted | 7 |
+
+`atom`, `swap!`, `reset!` and `deref` have been admitted via elaboration
+since 2026-09-02 (`lang/surface-status.edn`). The entry is still an
+`:intentional-security-constraint`, because what it protects is that
+state is not **ambient** — a cell that cannot be named outside one
+function body, cannot be stored and does not exist at runtime is not
+ambient state.
+
+**What is actually blocking is the EFFECTS**, not the notation: the
+`langchain.db` write, the LLM call, the ledger persistence. That is a
+property — ambient authority stays excluded — rather than an
+implementation state, so it will not widen the way the notation did. The
+StateGraph's pure skeleton (`state + event -> next-state + inert
+effects`) is plausibly native-able today, as its own migration unit,
+once the langgraph dependency is replaced by the contract itself.
+
+Q9 still does not accept a decision core as a migration unit, so
+`kotoba/kumiai/resolution_core.kotoba` does not make this component
+migrated. The `.cljc` suite below is the oracle, and Q9 marks a JVM
+oracle as historical and non-gating: the gate is the command above.
 
 ```bash
 clojure -M:dev:run          # fee-services actor: two clean lifecycles + seven HARD-hold cases
