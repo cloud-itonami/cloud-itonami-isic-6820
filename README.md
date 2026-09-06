@@ -101,6 +101,30 @@ proposal still always routes to a human.
 
 ## Run
 
+The judgement core now has a Kotoba build, and it does not start a JVM:
+
+```bash
+K=<workspace>/orgs/kotoba-lang/amu/bin/kotoba   # the driver; runs on nbb
+$K -M check   <abs>/kotoba/kumiai/resolution_core.kotoba
+$K -M compile <abs>/kotoba/kumiai/resolution_core.kotoba \
+      --target wasm32-browser --output <abs>/resolution_core.wasm     # JVM-free
+$K -M compile <abs>/kotoba/kumiai/resolution_core.kotoba \
+      --target js-browser     --output /tmp/kout/resolution_core.mjs  # spawns clojure
+nbb --classpath src:test test/kotoba/parity.cljs                      # 0 pass / 1 disagree / 3 skip
+```
+
+Absolute paths are required (a relative one fails as `input could not be
+read`), the flag is `--output` not `-o`, the targets are
+`wasm32-browser` / `js-browser` not `wasm` / `web`, and without `-M` the
+driver refuses with `compiler commands require the -M execution
+boundary`. Do not reach for `~/.local/bin/kotoba` on this machine: it is
+a two-line shim onto a deleted `/tmp` path, so `which` finds it and
+running it exits 126.
+
+The rest of the actor still runs on the JVM suite below; the `.cljc` is
+the oracle the Kotoba module is measured against, and it stays until the
+remaining slices move.
+
 ```bash
 clojure -M:dev:run          # fee-services actor: two clean lifecycles + seven HARD-hold cases
 clojure -M:dev:run-kumiai   # 管理組合 actor: reserve projection under escalation/slippage, a general-meeting resolution, a works order, and eleven HARD-hold cases
@@ -170,6 +194,8 @@ actors have toward `kotoba-lang/insurance`.
 | `src/realty/kumiai/phase.cljc` | **Phase 0→3** -- works commissioning and resolution filing never auto-commit at any phase |
 | `src/realty/kumiai/operation.cljc` | **OperationActor** (kumiai) -- langgraph-clj StateGraph |
 | `src/realty/kumiai/sim.cljc` | 管理組合 demo driver |
+| `kotoba/kumiai/resolution_core.kotoba` | **The judgement core in Kotoba** — exact cross-multiplied comparison, the exact-boundary flag, the smallest clearing tally, and the quorum/notice/axes fold. Compiles to wasm32-browser with no capabilities and no JVM |
+| `test/kotoba/parity.cljs` | nbb parity between the two, over every exact boundary in the six statutes. Skip (3) is a different exit code from pass (0) |
 | `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage · observation contract |
 
 ## The observation contract (`fee-observation/1`)
@@ -411,6 +437,44 @@ a simple majority of the votes cast; § 21 Abs. 2 Nr. 1 is what puts the
 cost on *every* owner rather than only the yes-voters (§ 21 Abs. 3). An
 actor reporting "the works were approved" without that second question
 would be answering a question nobody asked.
+
+### The judgement core is written in Kotoba
+
+`realty.kumiai.resolution` answers one question for six jurisdictions —
+did this resolution pass, and against which denominator — and the
+arithmetic that answers it is exact integer cross-multiplication. That
+is what `kotoba/kumiai/resolution_core.kotoba` is: the same judgement in
+a language whose whole point is that it cannot reach a socket, cannot
+throw, and compiles to a WebAssembly module that asks the host for
+**nothing** (`requiredCapabilities: []`).
+
+Four functions cross over: `axis-met`, `axis-boundary`, `axis-required`,
+and `judge-1` / `judge-2` / `judge-3`.
+
+**Why three judge arities and not a fold.** Measured, not assumed:
+`[:vector :i64]` is rejected (`heterogeneous vector types must be a
+bounded vector`), and the bounded vector that IS admitted is the
+`vector-i64` / `vector-at` family, which carries integers rather than
+records. A vector of records — what a general fold needs — is not
+admitted today. Every rule in the catalog counts one, two or three axes
+and no more, so the three entry points cover it exactly; they collapse
+into one fold the day a vector of records is admitted, and the module
+header says so.
+
+**What stays on the host, and why.** Validation refuses structurally
+impossible tallies by throwing, and `throw` is permanently outside this
+language — moving it means returning `[:result T E]`, a real change to
+every caller that belongs in its own slice. `explain` builds a Japanese
+sentence, and the string surface here is byte-addressed.
+
+**Parity is measured in both directions.** `test/kotoba/parity.cljs`
+runs 21 cases — every exact boundary in the six statutes, including two
+thirds of 99, which a float would round — and compares the `.cljc`
+against the compiled artifact. Flipping the single strict comparison in
+the Kotoba source from `>` to `>=` turns three of them red (the
+exactly-half cases in Japan, Germany and France) and the run exits 1; put
+back, 0 disagreements and exit 0; with no artifact built, exit **3**, so
+a skipped parity check cannot be read as a passing one.
 
 ### The reserve benchmark stays Japanese
 
