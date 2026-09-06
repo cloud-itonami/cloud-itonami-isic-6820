@@ -111,9 +111,9 @@
 
     (println)
     (println "== AUS-NSW -- 閾値が反対側に置かれた規則 (賛成票は条文に現れない) ==")
-    (let [base {:total {:unit-entitlement 10000}
-                :attending {:unit-entitlement 6000}
-                :cast {:unit-entitlement 4000}}]
+    (let [base {:total {:unit-entitlement 10000 :owners 100}
+                :attending {:unit-entitlement 6000 :owners 60}
+                :cast {:unit-entitlement 4000 :owners 40}}]
       (doseq [[label against]
               [["反対 1,000 / 投票価値 4,000 (ちょうど25%)" 1000]
                ["反対 1,001 (25%超)" 1001]
