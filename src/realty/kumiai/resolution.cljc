@@ -42,7 +42,26 @@
      第61条第5項 require an attendance threshold BEFORE the
      supermajority is counted at all.
 
-  5. SOME STATUTES PROVIDE A FALLBACK. France's article 25-1 lets an
+  5. SOME RULES HAVE NO BASE AT ALL. Singapore's ordinary resolution
+     (Building (Strata Management) Act 2004, s 2(2)(b)) is decided by
+     comparing the valid votes FOR against the valid votes AGAINST --
+     `more than the valid votes counted against the motion`. There is
+     no fraction and no denominator: abstentions are simply absent from
+     both sides, and a TIE fails. A model that had to express every
+     rule as a fraction of something would have to invent a denominator
+     here, and the invented one would disagree with the statute as soon
+     as anyone abstained.
+
+  6. A NOTICE PERIOD CAN BE PART OF THE DEFINITION, not evidence
+     around it. The same Singapore section says a motion `is decided by
+     ordinary resolution IF (a) the motion is passed at a duly convened
+     general meeting held on the 15th day (or later) after the notice
+     ... AND (b) the votes ...`. A motion carried on the 14th day is
+     not a narrowly-failed ordinary resolution; it is not an ordinary
+     resolution at all. So `:notice-days` is checked here and lands in
+     `:passed?`, rather than being left to the evidence checklist.
+
+  7. SOME STATUTES PROVIDE A FALLBACK. France's article 25-1 lets an
      assembly that failed the article 25 majority, but reached at least
      a third of all owners' votes, vote AGAIN immediately at the
      article 24 majority. That is a second ballot, not an arithmetic
@@ -98,7 +117,7 @@
   or is the `voix` of a French syndicat or the `cuota de
   participación` of a Spanish comunidad; `:co-ownership-shares` is
   WEG Miteigentumsanteile; `:land-use-right-value` is a value."
-  #{:owners})
+  #{:owners :valid-votes})
 
 (defn- normalize-axes
   "One axis descriptor per axis, with the rule's own values filled in.
@@ -202,7 +221,7 @@
 (def ^:private base-label
   {:total "総数 / all members" :attending "出席者 / attending" :cast "投票 / votes cast"})
 
-(defn- validate! [rule {:keys [total attending cast in-favour]}]
+(defn- validate! [rule {:keys [total attending cast in-favour against notice-days-elapsed]}]
   (let [axes (normalize-axes rule (:fraction rule))
         counts {:total total :attending attending :cast cast}
         needed (cond-> (into #{} (map :base axes))
@@ -212,6 +231,16 @@
         (throw (ex-info (str "resolution: this rule counts the " (name b)
                              " base, so those counts are required")
                         {:article (:article rule) :base b}))))
+    (when (and (:notice-days rule) (nil? notice-days-elapsed))
+      (throw (ex-info (str "resolution: this rule defines itself partly by a notice period, "
+                           "so :notice-days-elapsed is required")
+                      {:article (:article rule) :notice-days (:notice-days rule)})))
+    (doseq [{:keys [axis comparison]} axes]
+      (when (and (= :more-than-opposed (or comparison (:comparison rule)))
+                 (nil? (get against axis)))
+        (throw (ex-info (str "resolution: this rule compares votes for against votes against, "
+                             "so :against is required on axis " axis)
+                        {:axis axis :article (:article rule)}))))
     (doseq [{:keys [axis base]} axes]
       (let [t (get total axis) f (get in-favour axis) b (get (get counts base) axis)]
         (when (nil? t) (throw (ex-info (str "resolution: total is missing axis " axis) {:axis axis})))
@@ -223,7 +252,12 @@
           (throw (ex-info (str "resolution: " (name base) " exceeds total on axis " axis) {:axis axis})))
         (when (> (double f) (double b))
           (throw (ex-info (str "resolution: in-favour exceeds the " (name base) " base on axis " axis)
-                          {:axis axis :base base})))))
+                          {:axis axis :base base})))
+        (when-let [ag (get against axis)]
+          (when (> (+ (double f) (double ag)) (double b))
+            (throw (ex-info (str "resolution: for + against exceeds the " (name base)
+                                 " base on axis " axis)
+                            {:axis axis :base base}))))))
     ;; Votes cast cannot exceed attendance, wherever both are supplied:
     ;; a ballot cannot record more votes than there were people to cast
     ;; them. Checked across ALL supplied axes, not only the ones this
@@ -248,16 +282,42 @@
      {:applied? true :article "建物の区分所有等に関する法律 第38条の2" :count-by-axis count-by-axis}]
     [total (when exclusion {:applied? false :reason :not-court-ordered})]))
 
-(defn- axis-result [{:keys [axis base fraction comparison]} base-count in-favour]
+(defn- axis-result
+  "One axis judged. Two kinds of comparison land here:
+
+    a FRACTION of a base (every civil-law rule in this catalog), and
+    FOR versus AGAINST (Singapore's ordinary resolution), where there
+    is no base to take a fraction of and a tie fails.
+
+  The second is not the first with a base of `for + against`: valid
+  votes are only those two, but the statute compares the two tallies
+  directly, and writing it as `for > (for+against)/2` would give the
+  same answer only because the algebra happens to agree -- and would
+  quietly stop agreeing the moment a statute weighted them
+  differently."
+  [{:keys [axis base fraction comparison]} base-count in-favour against]
   (let [integral? (contains? integral-axes axis)]
-    {:axis axis
-     :counted-against base
-     :base base-count
-     :in-favour in-favour
-     :fraction fraction
-     :required (required base-count fraction comparison integral?)
-     :met? (meets? in-favour base-count fraction comparison)
-     :on-boundary? (on-boundary? in-favour base-count fraction)}))
+    (if (= :more-than-opposed comparison)
+      (let [a (double (or against 0))]
+        {:axis axis
+         :counted-against base
+         :base base-count
+         :in-favour in-favour
+         :opposed against
+         :fraction nil
+         :comparison comparison
+         :required (if integral? (inc a) a)
+         :met? (> (double in-favour) a)
+         :on-boundary? (== (double in-favour) a)})
+      {:axis axis
+       :counted-against base
+       :base base-count
+       :in-favour in-favour
+       :fraction fraction
+       :comparison comparison
+       :required (required base-count fraction comparison integral?)
+       :met? (meets? in-favour base-count fraction comparison)
+       :on-boundary? (on-boundary? in-favour base-count fraction)})))
 
 ;; ----------------------------- tally -----------------------------
 
@@ -294,6 +354,12 @@
                                       counting `abgegebene Stimmen` or
                                       `voix exprimées`
     :in-favour   {axis -> count}
+    :against     {axis -> count}   -- required by rules that compare the
+                                      two tallies directly rather than
+                                      taking a fraction of a base
+    :notice-days-elapsed n         -- required where the statute makes a
+                                      notice period part of the
+                                      definition of the resolution
     :exclusion   {:court-ordered? bool :count-by-axis {axis -> n}}
     :relaxation-conditions #{..}
     :bylaw-override {:fraction {..} :recorded? bool :provision \"..\"
@@ -310,7 +376,7 @@
                  (let [rs (mapv (fn [axis]
                                   (axis-result {:axis axis :base :attending
                                                 :fraction (:fraction q) :comparison (:comparison q)}
-                                               (get total axis) (get (:attending input) axis)))
+                                               (get total axis) (get (:attending input) axis) nil))
                                 (:axes q))]
                    {:required-of :total
                     :fraction (:fraction q)
@@ -320,11 +386,17 @@
         axes (mapv (fn [spec]
                      (axis-result spec
                                   (get (get counts (:base spec)) (:axis spec))
-                                  (get (:in-favour input) (:axis spec))))
+                                  (get (:in-favour input) (:axis spec))
+                                  (get (:against input) (:axis spec))))
                    axes-spec)
+        notice (when-let [d (:notice-days rule)]
+                 {:required-days d
+                  :elapsed-days (:notice-days-elapsed input)
+                  :met? (>= (double (:notice-days-elapsed input)) (double d))})
         quorum-ok? (or (nil? quorum) (:met? quorum))
+        notice-ok? (or (nil? notice) (:met? notice))
         axes-ok? (every? :met? axes)
-        passed? (and quorum-ok? axes-ok?)]
+        passed? (and quorum-ok? notice-ok? axes-ok?)]
     {:passed? passed?
      :article (:article rule)
      :label (:label rule)
@@ -333,6 +405,7 @@
      :comparison (:comparison rule)
      :effective-fraction eff
      :quorum quorum
+     :notice notice
      :axes axes
      :exclusion exclusion-note
      :fallback (fallback-for rule total (:in-favour input) passed?)
@@ -340,6 +413,7 @@
      :failed-axes (mapv :axis (remove :met? axes))
      :reasons (cond-> []
                 (not quorum-ok?) (conj :quorum-unmet)
+                (not notice-ok?) (conj :notice-period-unmet)
                 (not axes-ok?) (conj :threshold-unmet)
                 (:rejected-override eff) (conj (get-in eff [:rejected-override :reason]))
                 (and (:exclusion input) (not (:applied? exclusion-note))) (conj :exclusion-not-court-ordered))}))
@@ -351,16 +425,22 @@
   article 26 those differ between the axes of a single rule -- a line
   that printed one fraction for the rule would be describing a rule
   that does not exist."
-  [{:keys [passed? article label quorum axes on-boundary? fallback]}]
+  [{:keys [passed? article label quorum notice axes on-boundary? fallback]}]
   (str label " (" article ")"
        (when quorum (str " / 定足数: " (if (:met? quorum) "充足" "不足")))
+       (when notice (str " / 通知期間: " (:elapsed-days notice) "日 (要 " (:required-days notice) "日) "
+                         (if (:met? notice) "○" "×")))
        " / 軸: "
        (str/join "、" (map (fn [a]
-                             (str (name (:axis a)) " " (:in-favour a) "/" (:base a)
-                                  " [" (get base-label (:counted-against a) "?") "]"
-                                  " 要 " (:required a)
-                                  " (" (:numer (:fraction a)) "/" (:denom (:fraction a)) ")"
-                                  " " (if (:met? a) "○" "×")))
+                             (if (= :more-than-opposed (:comparison a))
+                               (str (name (:axis a)) " 賛成 " (:in-favour a)
+                                    " 対 反対 " (:opposed a)
+                                    " (基準無し・同数は否決) " (if (:met? a) "○" "×"))
+                               (str (name (:axis a)) " " (:in-favour a) "/" (:base a)
+                                    " [" (get base-label (:counted-against a) "?") "]"
+                                    " 要 " (:required a)
+                                    " (" (:numer (:fraction a)) "/" (:denom (:fraction a)) ")"
+                                    " " (if (:met? a) "○" "×"))))
                            axes))
        " => " (if passed? "可決" "否決")
        (when on-boundary? " [要件ちょうどの軸あり -- 人的確認を推奨]")

@@ -105,6 +105,7 @@
 (def ^:private two-thirds {:numer 2 :denom 3})
 (def ^:private three-quarters {:numer 3 :denom 4})
 (def ^:private four-fifths {:numer 4 :denom 5})
+(def ^:private nine-tenths {:numer 9 :denom 10})
 (def ^:private unanimity {:numer 1 :denom 1})
 
 (def ^:private majority-quorum
@@ -413,6 +414,105 @@
     :bylaw :none
     :note "`la majorité des membres du syndicat représentant au moins les deux tiers des voix`。軸ごとに分数も比較も違う。"}})
 
+(def sgp-resolutions
+  "Transcribed from the current text of the Building (Strata
+  Management) Act 2004, section 2, on Singapore Statutes Online.
+
+  Note the TITLE. The act this catalog previously pointed at as
+  `Building Maintenance and Strata Management Act 2004` is now the
+  `Building (Strata Management) Act 2004`, and its SSO identifier is
+  `BSMA2004`, not `BMSMA2004` -- which is why every earlier fetch
+  returned a 200 carrying a Page Not Found. Remembering an act's name
+  is not knowing it.
+
+  Singapore contributes two shapes no civil-law entry in this catalog
+  needed:
+
+  - The ordinary resolution has NO BASE. s 2(2)(b) decides it by
+    comparing the valid votes FOR against the valid votes AGAINST --
+    on a show of hands by count, and `on a poll` by aggregate share
+    value. Abstentions appear on neither side and a TIE fails. Writing
+    it as a fraction would require inventing a denominator, and the
+    invented one would part company with the statute as soon as anyone
+    abstained.
+  - The NOTICE PERIOD is part of the definition, not evidence around
+    it: `a motion is decided by ordinary resolution if (a) the motion
+    is passed at a duly convened general meeting held on the 15th day
+    (or later) after the notice ... and (b) the votes ...`. A motion
+    carried on the 14th day is not a narrowly-failed ordinary
+    resolution. It is not an ordinary resolution.
+
+  s 2(8) also defines a valid vote negatively -- a vote given both for
+  and against, unmarked, or void for uncertainty is not one. That is a
+  fact about each ballot paper, so this actor takes the valid counts as
+  given and does not attempt to derive them."
+  {:ordinary-show-of-hands
+   {:label "Ordinary resolution -- no poll taken"
+    :article "Building (Strata Management) Act 2004, section 2(2)(b)(i)"
+    :notice-days 15
+    :base :cast :quorum nil :fraction nil :comparison :more-than-opposed
+    :axes [{:axis :valid-votes :base :cast :comparison :more-than-opposed}]
+    :bylaw :none
+    :note "賛成票数 > 反対票数。分母は無く、同数は否決。"}
+
+   :ordinary-poll
+   {:label "Ordinary resolution -- on a poll"
+    :article "Building (Strata Management) Act 2004, section 2(2)(b)(ii)"
+    :notice-days 15
+    :base :cast :quorum nil :fraction nil :comparison :more-than-opposed
+    :axes [{:axis :share-value :base :cast :comparison :more-than-opposed}]
+    :bylaw :none
+    :note "poll を採ると、頭数ではなく lot の share value で数える。同じ総会・同じ議案でも数え方が変わる。"}
+
+   :special
+   {:label "Special resolution"
+    :article "Building (Strata Management) Act 2004, section 2(3)"
+    :notice-days 22
+    :base :cast :quorum nil
+    :axes [:share-value]
+    :fraction three-quarters :comparison :at-least
+    :bylaw :none
+    :note "母数は出席者が投じた有効票の share value 合計 (棄権・無効票を含まない)。"}
+
+   :ninety-percent
+   {:label "90% resolution"
+    :article "Building (Strata Management) Act 2004, section 2(5)"
+    :notice-days 22
+    :base :cast :quorum nil
+    :axes [:share-value]
+    :fraction nine-tenths :comparison :at-least
+    :bylaw :none}
+
+   :unanimous
+   {:label "Unanimous resolution"
+    :article "Building (Strata Management) Act 2004, section 2(4)"
+    :notice-days 22
+    :base :cast :quorum nil
+    :axes [:valid-votes]
+    :fraction unanimity :comparison :at-least
+    :bylaw :none
+    :note "出席者が投じた有効票の全部。全区分所有者の全部ではない。"}
+
+   :comprehensive
+   {:label "Comprehensive resolution"
+    :article "Building (Strata Management) Act 2004, section 2(6)"
+    :notice-days 22
+    :base :total :quorum nil
+    :axes [:share-value]
+    :fraction nine-tenths :comparison :at-least
+    :bylaw :none
+    :note "総会から12週間後の時点の全区分所有者の share value に対して90%。母数が総数であり、しかも測定時点が総会より後ろにある。"}
+
+   :by-consensus
+   {:label "Resolution by consensus"
+    :article "Building (Strata Management) Act 2004, section 2(7)"
+    :notice-days 22
+    :base :total :quorum nil
+    :axes [:owners]
+    :fraction unanimity :comparison :at-least
+    :bylaw :none
+    :note "投票ではなく、12週間後の時点の全区分所有者による書面での支持。"}})
+
 ;; --------------------------------------------------------------------
 ;; reserve-fund guidance
 ;; --------------------------------------------------------------------
@@ -579,16 +679,18 @@
    "SGP"
    {:name "Singapore"
     :owner-authority "Building and Construction Authority / Strata Titles Boards"
-    :legal-basis-unverified "Building Maintenance and Strata Management Act 2004"
-    :provenance "https://sso.agc.gov.sg/Act/BMSMA2004"
-    :verified-on nil
-    :unverified-reason :source-unreachable
-    :source-attempt {:on "2026-09-06" :status 403
-                     :note "sso.agc.gov.sg は curl / WebFetch のいずれからも 403 を返した。定義 (ordinary / special / 90% / unanimous resolution) を読めていない。"}
+    :legal-basis "Building (Strata Management) Act 2004"
+    :provenance "https://sso.agc.gov.sg/Act/BSMA2004"
+    :verified-on "2026-09-06"
+    :resolutions sgp-resolutions
     :required-evidence ["Strata title plan and by-laws"
                         "Management fund and sinking fund accounts"
+                        "Notice of the general meeting specifying the motion"
                         "Minutes of the general meeting"
-                        "Quantity surveyor's estimate"]}
+                        "Quantity surveyor's estimate"]
+    :notes ["The act's current short title is `Building (Strata Management) Act 2004` and its SSO identifier is BSMA2004. An earlier revision of this catalog carried the older name and the identifier BMSMA2004, and every fetch of it returned HTTP 200 with a Page Not Found body -- recorded here because the failure looked exactly like a success."
+            "s 2(8) defines a valid vote negatively (a vote given both for and against, unmarked, or void for uncertainty is not valid). Deciding which ballot papers are valid is a fact about the papers, so the valid counts are taken as given."
+            "There is no statutory per-square-metre sinking-fund benchmark comparable to the Japanese one, so this entry carries no :reserve-guideline."]}
 
    "AUS-NSW"
    {:name "Australia -- New South Wales (exemplar; strata law is per-state)"
@@ -596,9 +698,10 @@
     :legal-basis-unverified "Strata Schemes Management Act 2015 (NSW)"
     :provenance "https://legislation.nsw.gov.au/view/html/inforce/current/act-2015-050"
     :verified-on nil
-    :unverified-reason :source-unreachable
+    :unverified-reason :source-behind-bot-challenge
     :source-attempt {:on "2026-09-06" :status 403
-                     :note "legislation.nsw.gov.au は curl / WebFetch のいずれからも 403。special resolution の定義 (反対票の割合で定義される形) を読めていない。"}
+                     :challenge :cloudflare-interstitial
+                     :note "legislation.nsw.gov.au は HTML / PDF / 内部 API のいずれも 403 を返し、本文は Cloudflare の `Just a moment...` チャレンジだった。**これを回避しない** —— bot 検出の回避はこのワークスペースの安全床が禁じている。公式 API か官報の別配布経路が要る。"}
     :required-evidence ["Strata by-laws"
                         "Capital works fund plan (10-year)"
                         "Capital works fund account"
@@ -692,6 +795,14 @@
              the HTTP status, including the ones that answered 200 with
              something other than the text. UNVERIFIED is not the same
              as ABSENT, and neither is the same as CHECKED.
+        :source-behind-bot-challenge
+          -- there IS a statute, and the obstacle is a bot-detection
+             interstitial. Kept separate from the line above because
+             this one is not a matter of trying harder: defeating it is
+             something this workspace does not do, so the entry stays
+             unverified until an official API or another distribution
+             of the text exists. Naming the reason is the difference
+             between a gap and a decision.
 
   Reporting only the first number would make this actor look several
   times as capable as it is."
@@ -711,13 +822,15 @@
       :with-statutory-resolution-thresholds (vec (sort with-rules))
       :without-statutory-resolution-thresholds (vec (sort without))
       :without-thresholds-by-reason (into {} (map (fn [[k v]] [k (vec (sort v))]) by-reason))
-      :unreadable-sources (vec (sort (get by-reason :source-unreachable [])))
+      :unreadable-sources (vec (sort (concat (get by-reason :source-unreachable [])
+                                             (get by-reason :source-behind-bot-challenge []))))
       :note (str "cloud-itonami-isic-6820 kumiai: " (count catalog)
                  " jurisdictions seeded with an official spec-basis, of which "
                  (count with-rules)
                  " carry a statutory resolution-threshold table transcribed from the "
                  "current text. Of the rest, "
-                 (count (get by-reason :source-unreachable []))
+                 (count (concat (get by-reason :source-unreachable [])
+                                (get by-reason :source-behind-bot-challenge [])))
                  " HAVE a statutory table that this actor could not read (see "
                  ":source-attempt for the date and status) and "
                  (count (concat (get by-reason :no-statutory-threshold-table [])
@@ -742,6 +855,10 @@
            (= :source-unreachable (:unverified-reason b))
            (str " [法定要件は存在するが一次資料を取得できていない -- "
                 (:on (:source-attempt b)) " / HTTP " (:status (:source-attempt b)) "]")
+
+           (= :source-behind-bot-challenge (:unverified-reason b))
+           (str " [法定要件は存在するが、一次資料が bot 検出の背後にある -- 回避しない ("
+                (:on (:source-attempt b)) " / HTTP " (:status (:source-attempt b)) ")]")
 
            (= :no-unit-owner-vote (:unverified-reason b))
            " [区分所有者の決議という制度自体が無い (leasehold + s.20 consultation)]"
