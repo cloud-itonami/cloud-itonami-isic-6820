@@ -160,8 +160,8 @@ actors have toward `kotoba-lang/insurance`.
 | `src/realty/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
 | `src/realty/observation.cljc` | **Observation contract** (`fee-observation/1`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
 | `src/realty/sim.cljc` | demo driver |
-| `src/realty/kumiai/facts.cljc` | **管理組合** per-jurisdiction catalog: statutory resolution thresholds (JPN only, transcribed from the current 区分所有法 text) + the MLIT reserve-fund guideline values, with two-level honest coverage reporting |
-| `src/realty/kumiai/resolution.cljc` | Exact vote arithmetic: statutory denominator (attending ‖ total), per-axis thresholds, quorum stage, bylaw overrides, 第38条の2 exclusions, boundary flagging |
+| `src/realty/kumiai/facts.cljc` | **管理組合** per-jurisdiction catalog: statutory resolution thresholds for JPN / DEU / ESP / FRA transcribed from each statute's current text, six further jurisdictions recorded as unverified with the reason, + the MLIT reserve-fund guideline values, with three-level honest coverage reporting |
+| `src/realty/kumiai/resolution.cljc` | Exact vote arithmetic: statutory denominator (cast ‖ attending ‖ total), per-axis fraction AND per-axis denominator, quorum stage, instrument overrides, statutory fallback (FRA art. 25-1), 第38条の2 exclusions, boundary flagging |
 | `src/realty/kumiai/reserve.cljc` | Long-term repair plan projection under cost escalation and schedule slippage, deficit + `:unmeasured-outflow`, required-contribution solver, MLIT `Z` / benchmark band / staged-increase verdict |
 | `src/realty/kumiai/registry.cljc` | Resolution-minute + works-order draft records (unsigned) |
 | `src/realty/kumiai/store.cljc` | **Store** protocol for associations/plans/resolutions -- `MemStore` ‖ `DatomicStore`, pending works INLINE (double-commissioning guard) |
@@ -306,17 +306,32 @@ nothing in the proposal reveals which one was used. Only the recompute
 in `realty.kumiai.governor` finds it.
 
 **An unverified threshold must not answer like a verified one.**
-`realty.kumiai.facts/coverage` reports **two** numbers, not one: four
-jurisdictions have an official spec-basis, and exactly **one** of them
-carries a statutory resolution-threshold table checked against the
-current text. In New York the thresholds live in the individual
-condominium's declaration and bylaws; in England and Wales the tenure
-is usually leasehold and there is no unit-owner vote at all (major
-works are consulted on under s.20, not resolved). Those catalog entries
-carry **no** `:resolutions` table, `resolution-rule` returns `nil`, and
-the governor **holds** -- it never falls back to a plausible majority.
-Reporting only the first number would make this actor look four times
-as capable as it is.
+`realty.kumiai.facts/coverage` reports **three** levels, not one, and
+the distinctions between them are the honest part:
+
+- **judgeable** — **JPN, DEU, ESP, FRA** carry `:resolutions` tables
+  transcribed from each statute's current text, fetched on 2026-09-06.
+- **nothing to read** — in **New York** the thresholds live in each
+  condominium's declaration and bylaws, so there is no national table;
+  in **England and Wales** the tenure is usually leasehold and there is
+  no unit-owner vote at all (major works are consulted on under s.20,
+  not resolved). Reading harder will not close these.
+- **could not read it** — **Singapore, NSW, Italy and China** DO have
+  statutory thresholds and this actor failed to fetch them
+  (`sso.agc.gov.sg` and `legislation.nsw.gov.au` answered 403;
+  `normattiva.it` and `npc.gov.cn` answered **200 with a navigation
+  frame and a news page**). Each entry records the date and the status
+  in `:source-attempt`, and names the statute under
+  `:legal-basis-unverified` — a **different key** from `:legal-basis`,
+  so a pointer-to-check can never be read as something checked.
+
+All six behave identically at the governor: no `:resolutions` table
+means `resolution-rule` returns `nil` and the proposal **holds**. But
+they are not the same fact, and collapsing them would claim that
+reading harder cannot help — which is false for four of them. Note
+especially that a **200 is not a successful read**; recording those two
+as reachable would be exactly the failure this repository keeps
+guarding against.
 
 The other HARD checks: association not under management · plan below
 the guideline's own sample preconditions (a 15-year plan with one
@@ -336,6 +351,80 @@ is deliberately not HARD: the guideline states in terms that being
 outside the band does not by itself make the level improper, and
 holding on it would put this actor's opinion above the guideline's own
 words.
+
+### Four statutes, four different rule SHAPES
+
+Widening beyond Japan was not a matter of adding fractions. Each
+statute needed a shape the model did not have:
+
+| | denominator | axes | notes |
+|---|---|---|---|
+| **JPN** 区分所有法 | 出席者 (第39条) / 総数 (第62条) | 区分所有者 + 議決権 (+ 敷地利用権持分の価格 on the two sale resolutions) | quorum stage on 第17条/第31条/第61条第5項 |
+| **DEU** WEG | **abgegebene Stimmen** — votes CAST, abstentions excluded | one vote per owner (§ 25 Abs. 2); **+ Miteigentumsanteile** for cost allocation | no quorum since the 2020 WEMoG reform |
+| **ESP** Ley 49/1960 | total on the first call, **the attending on the second call of the same meeting** | propietarios + cuotas de participación | fractions run 1/3 · 1/2 · 3/5 · unanimity |
+| **FRA** loi 65-557 | **voix exprimées** (art. 24) / voix de tous (art. 25) | voices; **members + voices** at art. 26 | art. 25-1 permits an immediate second ballot |
+
+Two of these break a one-fraction-per-rule model outright:
+
+- **WEG § 21 Abs. 2 Nr. 1** — `mehr als zwei Dritteln der abgegebenen
+  Stimmen und der Hälfte aller Miteigentumsanteile`. Two thirds of the
+  votes **cast** and half of **all** shares: different fraction *and*
+  different denominator on the two axes of one rule. A model with one
+  denominator per rule would measure the shares axis as 4,000/6,000
+  instead of 4,000/10,000 and **pass a resolution that failed**.
+- **loi 65-557 art. 26** — `la majorité des membres du syndicat
+  représentant au moins les deux tiers des voix`. More than half the
+  members *and* at least two thirds of the voices: different fractions
+  and different comparisons on the two axes.
+
+`resolution_test.clj` and `jurisdictions_test.clj` build their fixtures
+so that a wrong denominator, a rule-level fraction or an ignored
+per-axis base **fails a test rather than passing one**. The clearest is
+one shared ballot — 100 members, 60 attend, 50 actually vote, 26 in
+favour — run through all four ordinary-resolution rules:
+
+```
+of the votes CAST    26/50  = 52%   DEU § 25 · FRA art. 24   -> 可決
+of those ATTENDING   26/60  = 43%   JPN 第39条第1項 · ESP 17.7(2)  -> 否決
+of ALL members       26/100 = 26%   FRA art. 25 · ESP 17.7(1)    -> 否決
+```
+
+Same ballot. Three denominators. Only the statute says which is right.
+
+Two more shapes that are recorded but deliberately **not applied**:
+
+- **FRA art. 25-1** lets an assembly that missed the art. 25 majority
+  but reached a third of all owners' votes re-vote at once at the
+  art. 24 majority. `tally` reports `:fallback {:available? true ...}`
+  and leaves `:passed?` false — the second ballot is an event that
+  either happened or did not, and inferring it would manufacture a vote.
+- **ESP art. 17.8** counts a properly summoned absentee who does not
+  dissent within 30 days as a vote in favour. Whether notice was proper
+  and whether 30 days have run are facts about the world, so
+  `:deemed-consent` carries `:auto-applied? false` and its three
+  preconditions.
+
+And one distinction the German entry makes that the others do not
+need: **deciding to do the work and deciding who pays for it are two
+different resolutions.** § 20 Abs. 1 approves a bauliche Veränderung on
+a simple majority of the votes cast; § 21 Abs. 2 Nr. 1 is what puts the
+cost on *every* owner rather than only the yes-voters (§ 21 Abs. 3). An
+actor reporting "the works were approved" without that second question
+would be answering a question nobody asked.
+
+### The reserve benchmark stays Japanese
+
+The projection maths — escalation, slippage, `:unmeasured-outflow`, the
+required-contribution solver — is jurisdiction-agnostic and runs for
+every association. The **benchmark** is not: the MLIT bands, the
+mechanical-parking unit costs and the `0.6 × D ≤ E ≤ F ≤ 1.1 × D`
+staged-increase rule are Japanese and apply nowhere else. Germany's
+Erhaltungsrücklage has no statutory minimum, Spain's fondo de reserva
+is a percentage of the ordinary budget rather than a rate per square
+metre, and France's fonds de travaux publishes no scale. So
+`reserve-guideline` returns `nil` outside Japan, `benchmark-band`
+returns `nil`, and nothing compares a German building to a Japanese
+band. `facts_test.clj` asserts that in both directions.
 
 ### What it does not do
 
@@ -372,10 +461,21 @@ carries its citation in the catalog, not from recollection:
   band 206〜356 -- so the transcription is regression-tested, not just
   the arithmetic.
 
-Jurisdictions other than Japan carry `:verified-on nil` and say in
-their own `:notes` what has not been checked. Extending coverage is
-additive: one map entry citing a real source. Never invent a
-jurisdiction's thresholds to make coverage look bigger.
+- Wohnungseigentumsgesetz (WEG), WEMoG 2020 version --
+  `https://www.gesetze-im-internet.de/woeigg/` (§§ 19, 20, 21, 22, 23,
+  25 read directly). Verified 2026-09-06.
+- Ley 49/1960, de 21 de julio, sobre propiedad horizontal, consolidated
+  text -- `https://www.boe.es/buscar/act.php?id=BOE-A-1960-10906`
+  (artículo 17 in full). Verified 2026-09-06.
+- Loi n° 65-557 du 10 juillet 1965 --
+  `https://www.legifrance.gouv.fr/loda/id/LEGITEXT000006068256/`
+  (articles 24, 25, 25-1, 26). Verified 2026-09-06.
+
+Every other jurisdiction carries `:verified-on nil` and says in its own
+`:unverified-reason`, `:notes` and `:source-attempt` exactly what was
+not checked and why. Extending coverage is additive: one map entry
+citing a real source. Never invent a jurisdiction's thresholds to make
+coverage look bigger.
 
 ## Business-process coverage (honest)
 

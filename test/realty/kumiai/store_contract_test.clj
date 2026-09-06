@@ -29,8 +29,11 @@
       (is (= {:type "3段(ピット2段)昇降式" :spaces 30}
              (:mechanical-parking (store/association s "association-1"))))
       (is (nil? (:pending-works (store/association s "association-1"))))
-      (is (= ["association-1" "association-2" "association-3" "association-4" "association-5"]
+      (is (= ["association-1" "association-2" "association-3" "association-4"
+              "association-5" "association-6" "association-7" "association-8"]
              (mapv :id (store/all-associations s))))
+      (is (= {:owners 48 :co-ownership-shares 1000}
+             (:membership (store/association s "association-6"))))
       (is (= 5 (count (:works (store/plan-of s "association-1")))))
       (is (= 30 (:horizon-years (store/plan-of s "association-1"))))
       (is (nil? (store/plan-of s "association-2")))

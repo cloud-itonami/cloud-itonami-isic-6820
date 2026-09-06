@@ -62,11 +62,23 @@
                 "jurisdiction" jurisdiction
                 "passed" (boolean (:passed? verdict))
                 "statutory_basis" (:article verdict)
-                "counted_against" (name (or (:base verdict) :unknown))
+                ;; Per AXIS, not per rule. Under WEG § 21 Absatz 2 the
+                ;; two axes of one resolution are counted against
+                ;; different denominators at different fractions, so a
+                ;; single pair of fields here would record a rule that
+                ;; does not exist.
+                "counted_against" (str/join "+" (map name (or (:bases verdict)
+                                                              [(or (:base verdict) :unknown)])))
                 "effective_fraction" (let [f (get-in verdict [:effective-fraction :fraction])]
-                                       (str (:numer f) "/" (:denom f)))
+                                       (if (and (:numer f) (:denom f))
+                                         (str (:numer f) "/" (:denom f))
+                                         "per-axis"))
                 "fraction_source" (name (get-in verdict [:effective-fraction :source] :unknown))
-                "axes" (mapv (fn [a] {"axis" (name (:axis a)) "base" (:base a)
+                "axes" (mapv (fn [a] {"axis" (name (:axis a))
+                                      "counted_against" (name (or (:counted-against a) :unknown))
+                                      "fraction" (let [f (:fraction a)]
+                                                   (when f (str (:numer f) "/" (:denom f))))
+                                      "base" (:base a)
                                       "in_favour" (:in-favour a) "required" (:required a)
                                       "met" (boolean (:met? a))})
                              (:axes verdict))

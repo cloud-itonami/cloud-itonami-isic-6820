@@ -14,6 +14,7 @@
   (:require [langgraph.graph :as g]
             [realty.kumiai.facts :as facts]
             [realty.kumiai.reserve :as reserve]
+            [realty.kumiai.resolution :as resolution]
             [realty.kumiai.store :as store]
             [realty.kumiai.operation :as op]))
 
@@ -47,15 +48,49 @@
         a (store/association db "association-1")
         plan (store/plan-of db "association-1")]
 
-    (println "== 法域カバレッジ (正直な二段報告) ==")
+    (println "== 法域カバレッジ (covered / 判定可能 / 読めなかった の3段報告) ==")
     (println (facts/coverage))
     (println)
-    (doseq [j ["JPN" "USA-NY" "GBR" "DEU"]] (println " " (facts/jurisdiction-summary j)))
+    (doseq [j (sort (keys facts/catalog))] (println " " (facts/jurisdiction-summary j)))
 
     (println)
-    (println "== 決議要件テーブル (JPN、e-Gov 現行条文より、令和7年改正 2026-04-01施行) ==")
-    (doseq [[k rule] (sort-by key facts/jpn-resolutions)]
-      (println " " k "->" (facts/rule-summary rule)))
+    (println "== 決議要件テーブル (一次資料から転記した4法域) ==")
+    (doseq [j ["JPN" "DEU" "ESP" "FRA"]]
+      (println (str "  -- " j " (" (:legal-basis (facts/spec-basis j)) ") --"))
+      (doseq [[k rule] (sort-by key (:resolutions (facts/spec-basis j)))]
+        (println "   " k "->" (facts/rule-summary rule))))
+
+    (println)
+    (println "== 同じ票を4法域の「普通決議」に通す -- 母数が違うので答えが割れる ==")
+    (println "   投票: 総数 100人 / 議決権 10,000、出席 60人 / 6,000、実投票 50人 / 5,000、賛成 26人 / 2,600")
+    (let [ballot {:total     {:owners 100 :voting-rights 10000 :co-ownership-shares 10000}
+                  :attending {:owners 60 :voting-rights 6000 :co-ownership-shares 6000}
+                  :cast      {:owners 50 :voting-rights 5000 :co-ownership-shares 5000}
+                  :in-favour {:owners 26 :voting-rights 2600 :co-ownership-shares 2600}}]
+      (doseq [[j k] [["JPN" :ordinary] ["DEU" :ordinary] ["ESP" :ordinary-first-call]
+                     ["ESP" :ordinary-second-call] ["FRA" :ordinary] ["FRA" :absolute-majority]]]
+        (let [rule (facts/resolution-rule j k)]
+          (println (str "   " j " " k " -> " (resolution/explain (resolution/tally rule ballot)))))))
+
+    (println)
+    (println "== 軸ごとに分数も母数も違う規則 (DEU § 21 Abs. 2 / FRA art. 26) ==")
+    (let [ballot {:total     {:owners 100 :voting-rights 10000 :co-ownership-shares 10000}
+                  :attending {:owners 80 :voting-rights 8000 :co-ownership-shares 8000}
+                  :cast      {:owners 60 :voting-rights 6000 :co-ownership-shares 6000}
+                  :in-favour {:owners 45 :voting-rights 7000 :co-ownership-shares 4000}}]
+      (doseq [[j k] [["DEU" :structural-alteration]
+                     ["DEU" :structural-alteration-cost-allocation]
+                     ["FRA" :double-majority]]]
+        (println (str "   " j " " k " -> "
+                      (resolution/explain (resolution/tally (facts/resolution-rule j k) ballot))))))
+
+    (println)
+    (println "== FRA art. 25-1 -- 否決だが3分の1に達したので、同一総会での再決議が可能 (自動可決はしない) ==")
+    (let [v (resolution/tally (facts/resolution-rule "FRA" :absolute-majority)
+                              {:total {:owners 100 :voting-rights 10000}
+                               :in-favour {:owners 40 :voting-rights 4000}})]
+      (println "  " (resolution/explain v))
+      (println "   :passed? =" (:passed? v) " / :fallback =" (:fallback v)))
 
     (println)
     (println "== association/intake association-1 ==")
@@ -195,6 +230,27 @@
     (println "== HARD hold: 遅延で工事が計画期間外に押し出され、投影に計上されていない ==")
     (println (exec! actor "k18" {:op :reserve/simulate :subject "association-1"
                                  :assumptions rising-and-late} operator))
+
+    (println)
+    (println "== 非JPN法域: 投影は動くが、目安との比較はしない (ガイドラインが無いため) ==")
+    (doseq [id ["association-6" "association-7" "association-8"]]
+      (let [a2 (store/association db id)
+            plan2 (store/plan-of db id)
+            s5 (reserve/shortfall (reserve/project a2 plan2 rising))]
+        (println (str "  " id " (" (:jurisdiction a2) ") -> "
+                      (if (:funded? s5) "充足" (str "不足 " (Math/round (:deficit s5))))
+                      " / benchmark=" (pr-str (reserve/benchmark-band (:jurisdiction a2) a2))
+                      " / horizon-check=" (pr-str (reserve/plan-conforms-to-horizon? (:jurisdiction a2) plan2))))))
+
+    (println)
+    (println "== HARD hold: 法定要件は在るが一次資料を取得できていない法域 (SGP) ==")
+    (println (exec! actor "k19" {:op :resolution/file :subject "res-sgp"
+                                 :association-id "association-4"
+                                 :resolution-kind :ordinary
+                                 :budget-amount 1
+                                 :tally {:total {:owners 55 :voting-rights 5200}
+                                         :attending {:owners 40 :voting-rights 3800}
+                                         :in-favour {:owners 35 :voting-rights 3300}}} operator))
 
     (println)
     (println "== 監査台帳 ==")
