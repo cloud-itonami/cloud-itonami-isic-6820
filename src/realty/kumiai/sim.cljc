@@ -55,7 +55,7 @@
 
     (println)
     (println "== 決議要件テーブル (一次資料から転記した4法域) ==")
-    (doseq [j ["JPN" "DEU" "ESP" "FRA"]]
+    (doseq [j ["JPN" "DEU" "ESP" "FRA" "SGP"]]
       (println (str "  -- " j " (" (:legal-basis (facts/spec-basis j)) ") --"))
       (doseq [[k rule] (sort-by key (:resolutions (facts/spec-basis j)))]
         (println "   " k "->" (facts/rule-summary rule))))
@@ -83,6 +83,31 @@
                      ["FRA" :double-majority]]]
         (println (str "   " j " " k " -> "
                       (resolution/explain (resolution/tally (facts/resolution-rule j k) ballot))))))
+
+    (println)
+    (println "== SGP -- 分母を持たない規則 (賛成 対 反対) と、定義の一部としての通知期間 ==")
+    (let [base {:total {:valid-votes 100 :share-value 10000}
+                :attending {:valid-votes 60 :share-value 6000}
+                :cast {:valid-votes 40 :share-value 4000}}]
+      (doseq [[label ballot]
+              [["21 賛成 / 19 反対 / 20 棄権 (通知30日)"
+                (merge base {:in-favour {:valid-votes 21 :share-value 1900}
+                             :against {:valid-votes 19 :share-value 2100}
+                             :notice-days-elapsed 30})]
+               ["同数 20-20 (通知30日)"
+                (merge base {:in-favour {:valid-votes 20} :against {:valid-votes 20}
+                             :notice-days-elapsed 30})]
+               ["30 賛成 / 5 反対 だが通知14日"
+                (merge base {:in-favour {:valid-votes 30} :against {:valid-votes 5}
+                             :notice-days-elapsed 14})]]]
+        (println (str "   " label))
+        (println (str "     show-of-hands -> "
+                      (resolution/explain (resolution/tally
+                                           (facts/resolution-rule "SGP" :ordinary-show-of-hands) ballot))))
+        (when (get-in ballot [:in-favour :share-value])
+          (println (str "     on a poll     -> "
+                        (resolution/explain (resolution/tally
+                                             (facts/resolution-rule "SGP" :ordinary-poll) ballot)))))))
 
     (println)
     (println "== FRA art. 25-1 -- 否決だが3分の1に達したので、同一総会での再決議が可能 (自動可決はしない) ==")

@@ -9,7 +9,7 @@
   ;; breaks a test rather than passing one.
   (let [c (f/coverage)]
     (is (= (count f/catalog) (:covered c)))
-    (is (= ["DEU" "ESP" "FRA" "JPN"] (:with-statutory-resolution-thresholds c)))
+    (is (= ["DEU" "ESP" "FRA" "JPN" "SGP"] (:with-statutory-resolution-thresholds c)))
     (is (< (count (:with-statutory-resolution-thresholds c)) (:covered c)))))
 
 (deftest coverage-splits-unreadable-from-nonexistent
@@ -20,7 +20,7 @@
   ;; that reading harder cannot help, which is false for four of them.
   (let [c (f/coverage)
         by (:without-thresholds-by-reason c)]
-    (is (= ["AUS-NSW" "CHN" "ITA" "SGP"] (:unreadable-sources c)))
+    (is (= ["AUS-NSW" "CHN" "ITA"] (:unreadable-sources c)))
     (is (= ["USA-NY"] (:no-statutory-threshold-table by)))
     (is (= ["GBR"] (:no-unit-owner-vote by)))
     (is (not-any? #{:unstated} (keys by)))))
@@ -28,13 +28,23 @@
 (deftest an-unreadable-source-records-the-attempt-not-a-guess
   ;; A remembered threshold and a fetched one must not be storable in
   ;; the same field, so the unverified entries use a DIFFERENT key.
-  (doseq [j ["SGP" "AUS-NSW" "ITA" "CHN"]]
+  (doseq [j ["AUS-NSW" "ITA" "CHN"]]
     (let [b (f/spec-basis j)]
       (is (nil? (:legal-basis b)) j)
       (is (some? (:legal-basis-unverified b)) j)
       (is (nil? (:resolutions b)) j)
       (is (some? (get-in b [:source-attempt :status])) j)
       (is (= "2026-09-06" (get-in b [:source-attempt :on])) j))))
+
+(deftest a-bot-challenge-is-recorded-as-a-decision-not-a-gap
+  ;; NSW is unverified because defeating a bot-detection interstitial is
+  ;; something this workspace does not do -- not because nobody tried.
+  ;; The reason keyword is separate so the two never collapse.
+  (let [b (f/spec-basis "AUS-NSW")]
+    (is (= :source-behind-bot-challenge (:unverified-reason b)))
+    (is (= :cloudflare-interstitial (get-in b [:source-attempt :challenge])))
+    (is (nil? (:resolutions b))))
+  (is (not= (f/unverified-reason "AUS-NSW") (f/unverified-reason "ITA"))))
 
 (deftest a-two-hundred-response-is-not-a-successful-read
   ;; ITA and CHN answered 200 with a navigation frame and a news page.
@@ -53,7 +63,7 @@
   (is (some? (f/spec-basis "USA-NY")))
   (is (nil? (f/resolution-rule "USA-NY" :ordinary)))
   (is (nil? (f/resolution-rule "GBR" :common-area-major-change)))
-  (is (nil? (f/resolution-rule "SGP" :ordinary))))
+  (is (nil? (f/resolution-rule "AUS-NSW" :ordinary))))
 
 (deftest only-japan-carries-a-reserve-benchmark
   ;; The MLIT bands are Japanese and apply nowhere else. Germany's
@@ -121,5 +131,7 @@
   (is (re-find #"決議要件 9 種" (f/jurisdiction-summary "JPN")))
   (is (re-find #"規約/宣言に依る" (f/jurisdiction-summary "USA-NY")))
   (is (re-find #"leasehold" (f/jurisdiction-summary "GBR")))
-  (is (re-find #"一次資料を取得できていない" (f/jurisdiction-summary "SGP")))
+  (is (re-find #"一次資料を取得できていない" (f/jurisdiction-summary "ITA")))
+  (is (re-find #"bot 検出の背後" (f/jurisdiction-summary "AUS-NSW")))
+  (is (re-find #"決議要件 7 種" (f/jurisdiction-summary "SGP")))
   (is (re-find #"NO SPEC-BASIS" (f/jurisdiction-summary "ATL"))))

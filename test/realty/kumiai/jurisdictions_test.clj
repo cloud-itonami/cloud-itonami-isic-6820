@@ -222,9 +222,11 @@
 ;; ----------------------------- refusals -----------------------------
 
 (deftest a-jurisdiction-whose-source-was-unreachable-still-refuses-to-answer
-  ;; SGP and NSW DO have statutory thresholds. Not having read them is
-  ;; not a licence to guess.
-  (doseq [j ["SGP" "AUS-NSW" "ITA" "CHN"]]
+  ;; These three DO have statutory thresholds. Not having read them is
+  ;; not a licence to guess. (Singapore was in this list until its
+  ;; primary source was reached; the entry moved rather than the rule
+  ;; being relaxed.)
+  (doseq [j ["AUS-NSW" "ITA" "CHN"]]
     (is (nil? (facts/resolution-rule j :ordinary)) j)
     (is (thrown? Exception (r/tally (facts/resolution-rule j :ordinary) shared-ballot)) j)))
 
@@ -244,3 +246,107 @@
     (is (re-find #"総数" line))
     (is (re-find #"2/3" line))
     (is (re-find #"1/2" line))))
+
+;; ----------------------------- SGP -----------------------------
+
+(def ^:private sgp-base
+  {:total     {:valid-votes 100 :share-value 10000 :owners 100}
+   :attending {:valid-votes 60 :share-value 6000 :owners 60}
+   :cast      {:valid-votes 40 :share-value 4000 :owners 40}
+   :notice-days-elapsed 30})
+
+(deftest singapore-decides-an-ordinary-resolution-with-no-base-at-all
+  ;; 21 for, 19 against, and 20 of the 60 present abstained. There is no
+  ;; denominator in the statute: the two tallies are compared directly.
+  (let [rule (facts/resolution-rule "SGP" :ordinary-show-of-hands)
+        ballot (merge sgp-base {:in-favour {:valid-votes 21}
+                                :against {:valid-votes 19}})
+        v (r/tally rule ballot)]
+    (is (true? (:passed? v)))
+    (is (= :more-than-opposed (:comparison (first (:axes v)))))
+    (is (nil? (:fraction (first (:axes v)))))
+    (is (= 19 (:opposed (first (:axes v)))))
+    (testing "a tie fails, and is flagged as sitting exactly on the line"
+      (let [tie (r/tally rule (merge sgp-base {:in-favour {:valid-votes 20}
+                                               :against {:valid-votes 20}}))]
+        (is (false? (:passed? tie)))
+        (is (true? (:on-boundary? tie)))))
+    (testing "and losing by one fails"
+      (is (false? (:passed? (r/tally rule (merge sgp-base {:in-favour {:valid-votes 19}
+                                                           :against {:valid-votes 21}}))))))))
+
+(deftest singapore-abstentions-are-on-neither-side
+  ;; The discriminating case. 21 for and 19 against out of 40 valid
+  ;; votes passes. If the rule were modelled as "more than half of the
+  ;; votes cast" with the base taken as the 60 who ATTENDED, 21 of 60
+  ;; would fail -- so a model that invented a denominator would reverse
+  ;; this result.
+  (let [v (r/tally (facts/resolution-rule "SGP" :ordinary-show-of-hands)
+                   (merge sgp-base {:in-favour {:valid-votes 21} :against {:valid-votes 19}}))]
+    (is (true? (:passed? v)))
+    (is (false? (r/meets? 21 60 {:numer 1 :denom 2} :greater-than))
+        "the invented-denominator answer, shown here to be the opposite")))
+
+(deftest singapore-refuses-to-guess-the-votes-against
+  (is (thrown? Exception
+               (r/tally (facts/resolution-rule "SGP" :ordinary-show-of-hands)
+                        (merge sgp-base {:in-favour {:valid-votes 21}})))))
+
+(deftest singapore-counts-by-share-value-once-a-poll-is-taken
+  ;; Same meeting, same motion, different counting basis. Here the head
+  ;; count carries the motion and the share value does not.
+  (let [ballot (merge sgp-base
+                      {:in-favour {:valid-votes 21 :share-value 1900}
+                       :against {:valid-votes 19 :share-value 2100}})]
+    (is (true? (:passed? (r/tally (facts/resolution-rule "SGP" :ordinary-show-of-hands) ballot))))
+    (is (false? (:passed? (r/tally (facts/resolution-rule "SGP" :ordinary-poll) ballot))))))
+
+(deftest singapore-notice-period-is-part-of-the-definition
+  ;; A motion carried on the 14th day is not a narrowly-failed ordinary
+  ;; resolution; it is not an ordinary resolution.
+  (let [rule (facts/resolution-rule "SGP" :ordinary-show-of-hands)
+        carried {:in-favour {:valid-votes 30} :against {:valid-votes 5}}]
+    (is (true? (:passed? (r/tally rule (merge sgp-base carried {:notice-days-elapsed 15})))))
+    (let [early (r/tally rule (merge sgp-base carried {:notice-days-elapsed 14}))]
+      (is (false? (:passed? early)))
+      (is (some #{:notice-period-unmet} (:reasons early)))
+      (is (true? (every? :met? (:axes early))) "the votes were there; the notice was not"))
+    (testing "special resolutions need a longer period than ordinary ones"
+      (is (= 15 (:notice-days rule)))
+      (is (= 22 (:notice-days (facts/resolution-rule "SGP" :special)))))
+    (testing "and a rule with a notice period refuses to answer without one"
+      (is (thrown? Exception (r/tally rule (merge (dissoc sgp-base :notice-days-elapsed) carried)))))))
+
+(deftest singapore-supermajorities-count-the-valid-votes-cast
+  ;; 3,000 of the 4,000 share value actually voted is exactly 75% -- and
+  ;; the statute says AT LEAST, so it passes and is flagged as sitting
+  ;; on the line.
+  (let [special (facts/resolution-rule "SGP" :special)
+        ballot (merge sgp-base {:in-favour {:share-value 3000} :against {:share-value 1000}})
+        v (r/tally special ballot)]
+    (is (true? (:passed? v)))
+    (is (true? (:on-boundary? v)))
+    (is (= :cast (:counted-against (first (:axes v)))))
+    (is (= 4000 (:base (first (:axes v)))) "the base is the valid votes cast, not the 6,000 present")
+    (is (false? (:passed? (r/tally special (merge sgp-base {:in-favour {:share-value 2999}
+                                                            :against {:share-value 1001}})))))
+    (testing "the 90% resolution is a strictly higher bar on the same base"
+      (is (false? (:passed? (r/tally (facts/resolution-rule "SGP" :ninety-percent) ballot))))
+      (is (true? (:passed? (r/tally (facts/resolution-rule "SGP" :ninety-percent)
+                                    (merge sgp-base {:in-favour {:share-value 3600}
+                                                     :against {:share-value 400}}))))))))
+
+(deftest singapore-unanimous-means-every-vote-cast-not-every-owner
+  (let [rule (facts/resolution-rule "SGP" :unanimous)]
+    (is (true? (:passed? (r/tally rule (merge sgp-base {:in-favour {:valid-votes 40}})))))
+    (is (false? (:passed? (r/tally rule (merge sgp-base {:in-favour {:valid-votes 39}})))))
+    (testing "40 of 40 cast is unanimous even though 60 of 100 owners are absent"
+      (is (= :cast (:base rule))))))
+
+(deftest singapore-comprehensive-and-consensus-count-everyone-later
+  (is (= :total (:base (facts/resolution-rule "SGP" :comprehensive))))
+  (is (= :total (:base (facts/resolution-rule "SGP" :by-consensus))))
+  (let [v (r/tally (facts/resolution-rule "SGP" :comprehensive)
+                   (merge sgp-base {:in-favour {:share-value 9000}}))]
+    (is (true? (:passed? v)))
+    (is (= 10000 (:base (first (:axes v)))) "measured against every proprietor, not the meeting")))
