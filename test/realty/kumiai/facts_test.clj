@@ -36,16 +36,17 @@
       (is (some? (get-in b [:source-attempt :status])) j)
       (is (= "2026-09-06" (get-in b [:source-attempt :on])) j))))
 
-(deftest a-partially-read-statute-yields-a-partial-table-not-a-guessed-one
-  ;; NSW s 5 was read; clause 14 of Schedule 1 was not. So the special
-  ;; and unanimous rules are present and the ordinary one is absent, and
-  ;; the governor holds on the absent one exactly as it would for a
-  ;; jurisdiction with no table at all.
-  (is (some? (f/resolution-rule "AUS-NSW" :special)))
-  (is (some? (f/resolution-rule "AUS-NSW" :unanimous)))
-  (is (nil? (f/resolution-rule "AUS-NSW" :ordinary)))
-  (is (true? (:partial? (f/spec-basis "AUS-NSW"))))
-  (is (nil? (f/unverified-reason "AUS-NSW"))))
+(deftest nsw-was-completed-in-two-passes-and-is-no-longer-partial
+  ;; s 5 first (special / unanimous), then Schedule 1 clauses 14 and 17
+  ;; during a later window when the site answered again. The table was
+  ;; partial in between and said so.
+  (doseq [k [:ordinary :ordinary-poll :special :unanimous
+             :special-sustainability-infrastructure :special-accessibility-infrastructure]]
+    (is (some? (f/resolution-rule "AUS-NSW" k)) (str k)))
+  (is (nil? (:partial? (f/spec-basis "AUS-NSW"))))
+  (is (nil? (f/unverified-reason "AUS-NSW")))
+  (testing "the quorum it carries is the disjunctive one"
+    (is (= :any (:mode (:quorum (f/resolution-rule "AUS-NSW" :special)))))))
 
 (deftest a-two-hundred-response-is-not-a-successful-read
   ;; ITA and CHN answered 200 with a navigation frame and a news page.

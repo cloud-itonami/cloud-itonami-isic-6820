@@ -236,12 +236,22 @@
   (let [axes (normalize-axes rule (:fraction rule))
         counts {:total total :attending attending :cast cast}
         needed (cond-> (into #{} (map :base axes))
-                 (:quorum rule) (into [:total :attending]))]
+                 (:quorum rule) (into [:total :attending]))
+        quorum-axes (when-let [q (:quorum rule)]
+                      (if (= :any (:mode q)) (mapv :axis (:disjuncts q)) (:axes q)))]
     (doseq [b needed]
       (when (nil? (get counts b))
         (throw (ex-info (str "resolution: this rule counts the " (name b)
                              " base, so those counts are required")
                         {:article (:article rule) :base b}))))
+    (doseq [axis quorum-axes]
+      ;; Every disjunct must be MEASURABLE even though only one need be
+      ;; met -- otherwise a missing count would silently remove a way of
+      ;; seating the meeting.
+      (when (or (nil? (get total axis)) (nil? (get attending axis)))
+        (throw (ex-info (str "resolution: the quorum counts axis " axis
+                             ", so total and attending are required for it")
+                        {:axis axis :article (:article rule)}))))
     (when (and (:notice-days rule) (nil? notice-days-elapsed))
       (throw (ex-info (str "resolution: this rule defines itself partly by a notice period, "
                            "so :notice-days-elapsed is required")
@@ -406,16 +416,32 @@
         eff (effective-fraction rule input)
         axes-spec (normalize-axes rule (:fraction eff))
         quorum (when-let [q (:quorum rule)]
-                 (let [rs (mapv (fn [axis]
-                                  (axis-result {:axis axis :base :attending
-                                                :fraction (:fraction q) :comparison (:comparison q)}
-                                               (get total axis) (get (:attending input) axis) nil))
-                                (:axes q))]
+                 ;; Two shapes. The default is CONJUNCTIVE: every axis
+                 ;; must be met (JPN 第17条第1項 needs a majority of the
+                 ;; owners AND of the voting rights to attend). NSW
+                 ;; Schedule 1 clause 17(2) is DISJUNCTIVE: a quorum
+                 ;; exists if a quarter of the persons OR a quarter of
+                 ;; the aggregate unit entitlement is present. Folding
+                 ;; the second into the first would refuse meetings the
+                 ;; statute seats.
+                 (let [any? (= :any (:mode q))
+                       specs (if any?
+                               (mapv #(merge {:base :attending} %) (:disjuncts q))
+                               (mapv (fn [axis] {:axis axis :base :attending
+                                                 :fraction (:fraction q)
+                                                 :comparison (:comparison q)})
+                                     (:axes q)))
+                       rs (mapv (fn [spec]
+                                  (axis-result spec (get total (:axis spec))
+                                               (get (:attending input) (:axis spec)) nil))
+                                specs)]
                    {:required-of :total
+                    :mode (if any? :any :all)
+                    :article (:article q)
                     :fraction (:fraction q)
                     :comparison (:comparison q)
                     :axes rs
-                    :met? (every? :met? rs)}))
+                    :met? (if any? (boolean (some :met? rs)) (every? :met? rs))}))
         axes (mapv (fn [spec]
                      (axis-result spec
                                   (get (get counts (:base spec)) (:axis spec))

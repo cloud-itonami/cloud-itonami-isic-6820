@@ -515,6 +515,26 @@
     :bylaw :none
     :note "投票ではなく、12週間後の時点の全区分所有者による書面での支持。"}})
 
+(def ^:private nsw-quorum
+  "Strata Schemes Management Act 2015 (NSW), Schedule 1 clause 17(2).
+
+  DISJUNCTIVE: a quorum is present if not less than a quarter of the
+  persons entitled to vote are present, OR not less than a quarter of
+  the aggregate unit entitlement is represented. Only one need hold.
+
+  Clause 17(2)(c) -- two persons present suffice where there is more
+  than one owner and the quorum otherwise calculated would come to
+  fewer than two -- is NOT applied here. It depends on comparing a
+  computed threshold against a headcount floor, and this actor does not
+  do that. The consequence is stated rather than hidden: in a very
+  small scheme this may report a quorum unmet where the clause would
+  have supplied one. It errs toward HOLD, which is the direction this
+  catalog errs everywhere else it knows only part of a rule."
+  {:mode :any
+   :article "Strata Schemes Management Act 2015 (NSW), Schedule 1 clause 17(2)"
+   :disjuncts [{:axis :owners :fraction one-quarter :comparison :at-least}
+               {:axis :unit-entitlement :fraction one-quarter :comparison :at-least}]})
+
 (def nsw-resolutions
   "Transcribed from the current text of the Strata Schemes Management
   Act 2015 (NSW), section 5, on legislation.nsw.gov.au.
@@ -556,7 +576,7 @@
   {:special
    {:label "Special resolution"
     :article "Strata Schemes Management Act 2015 (NSW), section 5(1)(b)(i)"
-    :base :cast :quorum nil
+    :base :cast :quorum nsw-quorum
     :axes [{:axis :unit-entitlement :base :cast
             :fraction one-quarter :comparison :opposition-at-most}]
     :fraction one-quarter :comparison :opposition-at-most
@@ -566,7 +586,7 @@
    :special-sustainability-infrastructure
    {:label "Special resolution -- sustainability infrastructure"
     :article "Strata Schemes Management Act 2015 (NSW), section 5(1)(b)(ii)"
-    :base :cast :quorum nil
+    :base :cast :quorum nsw-quorum
     :axes [{:axis :unit-entitlement :base :cast
             :fraction half :comparison :opposition-less-than}]
     :fraction half :comparison :opposition-less-than
@@ -576,16 +596,34 @@
    :special-accessibility-infrastructure
    {:label "Special resolution -- accessibility infrastructure"
     :article "Strata Schemes Management Act 2015 (NSW), section 5(1)(b)(iii)"
-    :base :cast :quorum nil
+    :base :cast :quorum nsw-quorum
     :axes [{:axis :unit-entitlement :base :cast
             :fraction half :comparison :opposition-less-than}]
     :fraction half :comparison :opposition-less-than
     :bylaw :none}
 
+   :ordinary
+   {:label "Ordinary motion -- majority in number, no poll"
+    :article "Strata Schemes Management Act 2015 (NSW), Schedule 1 clause 14(1)"
+    :base :cast :quorum nsw-quorum
+    :fraction nil :comparison :more-than-opposed
+    :axes [{:axis :owners :base :cast :comparison :more-than-opposed}]
+    :bylaw :none
+    :note "`a majority in number of the votes cast for and against`、1 lot につき 1 票。分母は無く、同数は否決 —— SGP s 2(2)(b)(i) と同じ形。"}
+
+   :ordinary-poll
+   {:label "Ordinary motion -- on a poll, by value"
+    :article "Strata Schemes Management Act 2015 (NSW), Schedule 1 clause 14(3)"
+    :base :cast :quorum nsw-quorum
+    :fraction nil :comparison :more-than-opposed
+    :axes [{:axis :unit-entitlement :base :cast :comparison :more-than-opposed}]
+    :bylaw :none
+    :note "poll が請求されると価値 (unit entitlement) で数え直す。cl 14(4): poll は多数決の直前・直後どちらでも請求でき、請求は撤回できる —— つまり同じ議案の可否が投票後に変わりうる。"}
+
    :unanimous
    {:label "Unanimous resolution"
     :article "Strata Schemes Management Act 2015 (NSW), section 5(3)"
-    :base :cast :quorum nil
+    :base :cast :quorum nsw-quorum
     :axes [{:axis :unit-entitlement :base :cast
             :fraction none :comparison :opposition-at-most}]
     :fraction none :comparison :opposition-at-most
@@ -778,15 +816,16 @@
     :provenance "https://legislation.nsw.gov.au/view/whole/html/inforce/current/act-2015-050"
     :verified-on "2026-09-06"
     :resolutions nsw-resolutions
-    :partial? true
     :required-evidence ["Strata by-laws"
                         "Capital works fund plan (10-year)"
                         "Capital works fund account"
                         "Minutes of the general meeting"
                         "Quantity surveyor estimate"]
-    :notes ["The ORDINARY resolution is absent on purpose. s 5 Note points at clause 14 of Schedule 1 for the simple majority; a Note is not the operative provision, and that clause was not read. `resolution-rule` therefore returns nil for :ordinary and the governor holds -- a partially read statute yields a partial table, not a guessed one."
+    :notes ["Read in two passes. s 5 (special / unanimous) first; then Schedule 1 clauses 14 and 17 (the ordinary motion and the quorum) during a later window when the site answered again. The table was partial in between, and said so -- a partially read statute yields a partial table, not a guessed one."
             "Access to this source is INTERMITTENT. legislation.nsw.gov.au answers curl with a Cloudflare interstitial, answered a plain urllib GET with the full text on 2026-09-06, and refused an identical request minutes later. Nothing was done to defeat the challenge: the readable response arrived without one. `scripts/hermes-kumiai-sources` re-probes it, and the rule stands that no entry may be moved on a body obtained by defeating a challenge."
-            "s 5(2A) reduces an original owner vote value by two thirds in the stated circumstances. Applying that reduction is the caller job; this actor takes the valued tallies as given."
+            "s 5(2A) reduces an original owner vote value by two thirds in the stated circumstances, and Schedule 1 clause 14(2)/(3) applies the same calculation to elections and polls. Applying the reduction is the caller job; this actor takes the valued tallies as given."
+            "Schedule 1 clause 17(2)(c) -- two persons present suffice in a very small scheme -- is not applied. See `nsw-quorum` for what that costs and which way it errs."
+            "Schedule 1 clause 14(4): a poll may be demanded immediately before OR AFTER a vote decided by number, and the demand may be withdrawn. The same motion therefore has two lawful counts (:ordinary and :ordinary-poll) and which one governs is a fact about the meeting, not about the motion."
             "There is no statutory per-square-metre capital-works benchmark comparable to the Japanese one, so this entry carries no :reserve-guideline."]}
 
    "ITA"

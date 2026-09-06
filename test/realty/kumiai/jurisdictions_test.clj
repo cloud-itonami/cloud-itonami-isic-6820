@@ -354,9 +354,11 @@
 ;; ----------------------------- AUS-NSW -----------------------------
 
 (def ^:private nsw-base
-  {:total {:unit-entitlement 10000}
-   :attending {:unit-entitlement 6000}
-   :cast {:unit-entitlement 4000}})
+  ;; Both quorum axes must be measurable even though clause 17(2) needs
+  ;; only one of them met.
+  {:total     {:unit-entitlement 10000 :owners 100}
+   :attending {:unit-entitlement 6000 :owners 60}
+   :cast      {:unit-entitlement 4000 :owners 40}})
 
 (deftest nsw-measures-the-opposition-not-the-support
   ;; s 5(1)(b)(i): not more than 25% of the value of votes cast against.
@@ -370,6 +372,59 @@
     (is (= 1000.0 (:max-opposition (first (:axes v)))))
     (is (nil? (:in-favour (first (:axes v)))))
     (is (false? (:passed? (r/tally rule (merge nsw-base {:against {:unit-entitlement 1001}})))))))
+
+(deftest nsw-quorum-is-disjunctive
+  ;; Schedule 1 clause 17(2): a quarter of the PERSONS or a quarter of
+  ;; the aggregate unit ENTITLEMENT. Only one need hold, so a meeting
+  ;; that is thin on heads and heavy on entitlement is seated -- and a
+  ;; conjunctive reading would refuse it.
+  (let [rule (facts/resolution-rule "AUS-NSW" :special)
+        ;; Thinning attendance thins what can be cast: the validator
+        ;; refuses a ballot recording more votes than there were people
+        ;; to cast them, and caught this fixture when it did not.
+        thin-heads (-> nsw-base
+                       (assoc-in [:attending :owners] 10)
+                       (assoc-in [:cast :owners] 10)
+                       (assoc :against {:unit-entitlement 100}))
+        v (r/tally rule thin-heads)]
+    (is (= :any (:mode (:quorum v))))
+    (is (false? (:met? (first (:axes (:quorum v))))) "a tenth of the persons")
+    (is (true? (:met? (second (:axes (:quorum v))))) "but 60% of the entitlement")
+    (is (true? (:met? (:quorum v))))
+    (is (true? (:passed? v))))
+  (testing "and when NEITHER disjunct holds the meeting is not seated"
+    (let [v (r/tally (facts/resolution-rule "AUS-NSW" :special)
+                     (-> nsw-base
+                         (assoc-in [:attending :owners] 10)
+                         (assoc-in [:attending :unit-entitlement] 1000)
+                         (assoc :cast {:owners 10 :unit-entitlement 900})
+                         (assoc :against {:unit-entitlement 100})))]
+      (is (false? (:met? (:quorum v))))
+      (is (false? (:passed? v)))
+      (is (some #{:quorum-unmet} (:reasons v)))))
+  (testing "and every disjunct must be measurable, or the tally refuses"
+    (is (thrown? Exception
+                 (r/tally (facts/resolution-rule "AUS-NSW" :special)
+                          (-> nsw-base
+                              (update :total dissoc :owners)
+                              (update :attending dissoc :owners)
+                              (update :cast dissoc :owners)
+                              (assoc :against {:unit-entitlement 100})))))))
+
+(deftest nsw-ordinary-motions-are-for-versus-against-in-two-counting-modes
+  ;; Schedule 1 clause 14(1) counts heads (one vote per lot); 14(3)
+  ;; recounts by unit entitlement once a poll is demanded, and 14(4)
+  ;; lets the poll be demanded AFTER the show of hands. So the same
+  ;; motion has two lawful answers and they can disagree.
+  (let [ballot (merge nsw-base {:in-favour {:owners 21 :unit-entitlement 1900}
+                                :against {:owners 19 :unit-entitlement 2100}})]
+    (is (true? (:passed? (r/tally (facts/resolution-rule "AUS-NSW" :ordinary) ballot))))
+    (is (false? (:passed? (r/tally (facts/resolution-rule "AUS-NSW" :ordinary-poll) ballot))))
+    (testing "a tie fails either way"
+      (let [tied (merge nsw-base {:in-favour {:owners 20 :unit-entitlement 2000}
+                                  :against {:owners 20 :unit-entitlement 2000}})]
+        (is (false? (:passed? (r/tally (facts/resolution-rule "AUS-NSW" :ordinary) tied))))
+        (is (true? (:on-boundary? (r/tally (facts/resolution-rule "AUS-NSW" :ordinary) tied))))))))
 
 (deftest nsw-refuses-to-decide-without-the-votes-against
   (is (thrown? Exception
