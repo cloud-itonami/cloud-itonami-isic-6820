@@ -6,36 +6,58 @@
   answer, independently of anything the advisor claimed: did this
   resolution actually pass?
 
-  Three things make that question harder than 'count the yes votes',
-  and all three are the kind of thing an LLM will get confidently
-  wrong:
+  Counting yes votes is the easy part. The hard part is that the SHAPE
+  of the rule differs per statute, and an implementation that assumes
+  one shape will answer confidently and wrongly under another. The
+  shapes this namespace has to carry, each because a real statute
+  demands it:
 
-  1. THE DENOMINATOR IS PART OF THE LAW. 第39条第1項 counts the
-     ATTENDING members; 第62条第1項 counts ALL members. Since the
-     令和7年改正 came into force (2026-04-01) the ordinary resolution --
-     the one a major-repair works order runs on -- moved from the total
-     base to the attending base. Counting a passed resolution against
-     the old base reports `fail` for something that lawfully passed,
-     and the arithmetic looks impeccable either way.
+  1. THE DENOMINATOR IS PART OF THE LAW, and there are three of them.
+     Japan's 第39条第1項 counts the ATTENDING members (and has since the
+     令和7年改正 took effect on 2026-04-01); 第62条第1項 counts ALL
+     members; Germany's WEG § 25 Absatz 1 and France's article 24 count
+     the votes actually CAST -- `abgegebene Stimmen` / `voix
+     exprimées` -- which excludes abstentions and so is smaller again.
+     Same ballot, three denominators, three possible answers, and the
+     arithmetic looks impeccable under each.
 
-  2. EVERY AXIS MUST CLEAR THE BAR INDEPENDENTLY. 区分所有者の頭数 AND
-     議決権 -- and for 第64条の6/第64条の7 also the value of the share
-     in the land-use right. A resolution that clears voting rights and
-     misses heads has NOT passed. Counting one axis is the single most
-     common real-world error, because voting rights are the number that
-     is easy to obtain.
+  2. EACH AXIS CAN CARRY ITS OWN FRACTION -- AND ITS OWN DENOMINATOR.
+     France's article 26 is `la majorité des membres du syndicat
+     représentant au moins les deux tiers des voix`: more than half the
+     members AND at least two thirds of the voices. Germany's
+     WEG § 21 Absatz 2 Nummer 1 is `mehr als zwei Dritteln der
+     abgegebenen Stimmen und der Hälfte aller Miteigentumsanteile` --
+     two thirds of the votes CAST and half of ALL co-ownership shares:
+     different fraction AND different denominator on the two axes of
+     one rule. A model with one fraction per rule cannot express
+     either, and a model with one denominator per rule would put the
+     German shares axis at 4,000/6,000 instead of 4,000/10,000 and pass
+     a resolution that failed.
 
-  3. A QUORUM IS A SEPARATE STAGE. 第17条第1項 / 第31条第1項 /
+  3. EVERY AXIS MUST CLEAR ITS BAR INDEPENDENTLY. Clearing voting
+     rights and missing heads is not a pass. Counting only the axis
+     that is easy to obtain is the commonest real-world error.
+
+  4. A QUORUM IS A SEPARATE STAGE. Japan's 第17条第1項 / 第31条第1項 /
      第61条第5項 require an attendance threshold BEFORE the
-     supermajority is counted at all. A meeting that reached the
-     supermajority of a thin attendance did not pass anything.
+     supermajority is counted at all.
+
+  5. SOME STATUTES PROVIDE A FALLBACK. France's article 25-1 lets an
+     assembly that failed the article 25 majority, but reached at least
+     a third of all owners' votes, vote AGAIN immediately at the
+     article 24 majority. That is a second ballot, not an arithmetic
+     consequence, so this namespace reports `:fallback` and never
+     silently applies it -- an actor that 'passed' a resolution on a
+     vote that never happened would be manufacturing a fact.
 
   Comparisons are exact: fractions are carried as {:numer :denom} and
   compared by cross-multiplication, never as floating-point ratios, and
-  never as ClojureScript-unreadable Ratio literals. `過半数` is a
-  STRICT majority (`:greater-than`); `N分のM以上` is `:at-least`. A
-  tally that lands EXACTLY on the line is flagged `:on-boundary?` so a
-  human sees it -- one miscounted proxy form flips such a vote."
+  never as ClojureScript-unreadable Ratio literals. `過半数` /
+  `Mehrheit` / `majorité` / `mayoría` is a STRICT majority
+  (`:greater-than`); `N分のM以上` / `mindestens` / `au moins` / `las
+  tres quintas partes` is `:at-least`. A tally that lands EXACTLY on
+  the line is flagged `:on-boundary?` so a human sees it -- one proxy
+  form flips such a vote."
   (:require [clojure.string :as str]))
 
 ;; ----------------------------- exact fraction comparison -----------------------------
@@ -57,8 +79,9 @@
 
 (defn required
   "The smallest tally that clears the bar. Integer axes (heads) get an
-  integer answer; continuous axes (voting rights expressed as floor
-  area) get the exact real threshold."
+  integer answer; continuous axes (voting weight apportioned by floor
+  area, by co-ownership share or by cuota de participación) get the
+  exact real threshold."
   [base {:keys [numer denom]} comparison integral?]
   (let [exact (/ (* (double base) numer) denom)]
     (if integral?
@@ -67,27 +90,65 @@
         (Math/ceil exact))
       exact)))
 
+;; ----------------------------- axes -----------------------------
+
+(def ^:private integral-axes
+  "Axes counted in whole people. The others are continuous quantities:
+  `:voting-rights` is apportioned by exclusive floor area (JPN 第38条),
+  or is the `voix` of a French syndicat or the `cuota de
+  participación` of a Spanish comunidad; `:co-ownership-shares` is
+  WEG Miteigentumsanteile; `:land-use-right-value` is a value."
+  #{:owners})
+
+(defn- normalize-axes
+  "One axis descriptor per axis, with the rule's own values filled in.
+
+  An axis may be a bare keyword -- it then takes the rule's base,
+  fraction and comparison -- or a map overriding any of them. An axis
+  that carries its OWN `:fraction` is a statutory constant on that
+  axis: a rule-level relaxation or instrument override moves the rule's
+  fraction, not that one."
+  [rule effective-fraction]
+  (mapv (fn [a]
+          (let [m (if (keyword? a) {:axis a} a)]
+            {:axis (:axis m)
+             :base (or (:base m) (:base rule))
+             :fraction (or (:fraction m) effective-fraction)
+             :comparison (or (:comparison m) (:comparison rule))}))
+        (:axes rule)))
+
 ;; ----------------------------- effective fraction -----------------------------
 
 (defn- bylaw-permits?
-  "May the association's own 規約 move this rule's threshold to
+  "May the association's own instrument move this rule's threshold to
   `fraction`? `:bylaw` says what the statute allows:
 
-    :none                -- no bylaw may change it (第31条第1項)
-    :lower-to-above-half -- may be lowered, but only to a fraction
-                            strictly above 1/2 (第17条第1項)
-    :raise-only          -- may only be raised (the quorum rules)
-    :any                 -- 別段の定め permitted (第39条第1項)"
-  [{:keys [bylaw] :as rule} {:keys [numer denom] :as fraction}]
-  (let [statutory (:fraction rule)
-        lower? (< (* (double numer) (:denom statutory)) (* (double (:numer statutory)) denom))
-        above-half? (> (* 2.0 numer) denom)]
-    (case bylaw
-      :none false
-      :any true
-      :raise-only (not lower?)
-      :lower-to-above-half (and (or lower? (= fraction statutory)) above-half?)
-      false)))
+    :none            -- no instrument may change it (JPN 第31条第1項,
+                        the Spanish and French rules, and every rule
+                        whose axes carry their own fractions, since
+                        there is no single rule-level fraction to move)
+    :lower-to-above-half
+                     -- may be lowered, but only to a fraction strictly
+                        above one half (JPN 第17条第1項)
+    :raise-only      -- may only be raised (the quorum rules)
+    :agreement-only  -- may be changed, but only by a recorded
+                        AGREEMENT (WEG Vereinbarung /
+                        Gemeinschaftsordnung), never by a resolution of
+                        the meeting itself
+    :any             -- 別段の定め permitted (JPN 第39条第1項)"
+  [{:keys [bylaw] :as rule} {:keys [numer denom] :as fraction} override]
+  (let [statutory (:fraction rule)]
+    (if (nil? statutory)
+      false
+      (let [lower? (< (* (double numer) (:denom statutory)) (* (double (:numer statutory)) denom))
+            above-half? (> (* 2.0 numer) denom)]
+        (case bylaw
+          :none false
+          :any true
+          :agreement-only (= :agreement (:instrument override))
+          :raise-only (not lower?)
+          :lower-to-above-half (and (or lower? (= fraction statutory)) above-half?)
+          false)))))
 
 (defn effective-fraction
   "The fraction that actually governs this vote, plus why.
@@ -95,14 +156,15 @@
   Two things can move it off the statutory default, and they are NOT
   symmetric:
 
-    - a statutory RELAXATION (第62条第2項 各号) applies when the
+    - a statutory RELAXATION (JPN 第62条第2項 各号) applies when the
       building meets one of the listed physical conditions. It is a
       fact about the building, so it must be evidenced, not asserted.
-    - a BYLAW override applies only where the statute lets a 規約 move
-      it AND the association actually recorded such a provision. A
-      claimed override with `:recorded? false` is refused here rather
-      than silently honoured -- otherwise 'our bylaws say two-thirds'
-      becomes an unfalsifiable way to lower any bar."
+    - an instrument override applies only where the statute lets the
+      association's own instrument move it AND the association actually
+      recorded such a provision. A claimed override with
+      `:recorded? false` is refused here rather than silently honoured
+      -- otherwise 'our bylaws say two thirds' becomes an unfalsifiable
+      way to lower any bar."
   [rule {:keys [relaxation-conditions bylaw-override]}]
   (let [relaxed (:relaxed rule)
         relax? (and relaxed (seq relaxation-conditions)
@@ -123,7 +185,7 @@
              :rejected-override {:reason :bylaw-override-not-recorded
                                  :claimed (:fraction bylaw-override)})
 
-      (not (bylaw-permits? rule (:fraction bylaw-override)))
+      (not (bylaw-permits? rule (:fraction bylaw-override) bylaw-override))
       (assoc base-source :fraction base-fraction
              :rejected-override {:reason :bylaw-override-not-permitted
                                  :claimed (:fraction bylaw-override)
@@ -135,50 +197,86 @@
        :article (:article rule)
        :provision (:provision bylaw-override)})))
 
-;; ----------------------------- tally -----------------------------
+;; ----------------------------- validation -----------------------------
 
-(def ^:private integral-axes
-  "Axes counted in whole people. `:voting-rights` is NOT one: it is
-  apportioned by exclusive floor area under 第38条, so it is a
-  continuous quantity. `:land-use-right-value` is a value, likewise."
-  #{:owners})
+(def ^:private base-label
+  {:total "総数 / all members" :attending "出席者 / attending" :cast "投票 / votes cast"})
 
-(defn- validate! [rule {:keys [total attending in-favour]}]
-  (doseq [axis (:axes rule)]
-    (let [t (get total axis) a (get attending axis) f (get in-favour axis)]
-      (when (nil? t) (throw (ex-info (str "resolution: total is missing axis " axis) {:axis axis})))
-      (when (nil? f) (throw (ex-info (str "resolution: in-favour is missing axis " axis) {:axis axis})))
-      (when (neg? (double t)) (throw (ex-info "resolution: counts must be >= 0" {:axis axis})))
-      (when (and a (> (double a) (double t)))
-        (throw (ex-info (str "resolution: attending exceeds total on axis " axis) {:axis axis})))
-      (when (> (double f) (double (or a t)))
-        (throw (ex-info (str "resolution: in-favour exceeds the base on axis " axis) {:axis axis})))))
-  (when (and (:quorum rule) (nil? attending))
-    (throw (ex-info "resolution: this rule has a quorum, so attendance is required" {:article (:article rule)})))
-  (when (and (= :attending (:base rule)) (nil? attending))
-    (throw (ex-info "resolution: this rule counts the attending base, so attendance is required"
-                    {:article (:article rule)}))))
+(defn- validate! [rule {:keys [total attending cast in-favour]}]
+  (let [axes (normalize-axes rule (:fraction rule))
+        counts {:total total :attending attending :cast cast}
+        needed (cond-> (into #{} (map :base axes))
+                 (:quorum rule) (into [:total :attending]))]
+    (doseq [b needed]
+      (when (nil? (get counts b))
+        (throw (ex-info (str "resolution: this rule counts the " (name b)
+                             " base, so those counts are required")
+                        {:article (:article rule) :base b}))))
+    (doseq [{:keys [axis base]} axes]
+      (let [t (get total axis) f (get in-favour axis) b (get (get counts base) axis)]
+        (when (nil? t) (throw (ex-info (str "resolution: total is missing axis " axis) {:axis axis})))
+        (when (nil? b) (throw (ex-info (str "resolution: " (name base) " is missing axis " axis)
+                                       {:axis axis :base base})))
+        (when (nil? f) (throw (ex-info (str "resolution: in-favour is missing axis " axis) {:axis axis})))
+        (when (neg? (double t)) (throw (ex-info "resolution: counts must be >= 0" {:axis axis})))
+        (when (> (double b) (double t))
+          (throw (ex-info (str "resolution: " (name base) " exceeds total on axis " axis) {:axis axis})))
+        (when (> (double f) (double b))
+          (throw (ex-info (str "resolution: in-favour exceeds the " (name base) " base on axis " axis)
+                          {:axis axis :base base})))))
+    ;; Votes cast cannot exceed attendance, wherever both are supplied:
+    ;; a ballot cannot record more votes than there were people to cast
+    ;; them. Checked across ALL supplied axes, not only the ones this
+    ;; rule happens to count.
+    (when (and cast attending)
+      (doseq [[axis c] cast]
+        (when-let [a (get attending axis)]
+          (when (> (double c) (double a))
+            (throw (ex-info (str "resolution: votes cast exceed attendance on axis " axis)
+                            {:axis axis}))))))))
 
 (defn- excluded-base
-  "第38条の2 lets a court exclude an owner whose identity or whereabouts
-  cannot be established from the denominator of EVERY resolution. That
-  is a court's act, not the association's: an exclusion asserted
-  without `:court-ordered? true` is ignored here (and reported), so it
-  cannot be used to shrink a denominator into a pass."
+  "JPN 第38条の2 lets a court exclude an owner whose identity or
+  whereabouts cannot be established from the denominator of EVERY
+  resolution. That is a court's act, not the association's: an
+  exclusion asserted without `:court-ordered? true` is ignored here
+  (and reported), so it cannot be used to shrink a denominator into a
+  pass."
   [total {:keys [count-by-axis court-ordered?] :as exclusion}]
   (if (and exclusion court-ordered? (map? count-by-axis))
     [(reduce-kv (fn [m axis v] (update m axis #(- (double (or % 0)) (double v)))) total count-by-axis)
      {:applied? true :article "建物の区分所有等に関する法律 第38条の2" :count-by-axis count-by-axis}]
     [total (when exclusion {:applied? false :reason :not-court-ordered})]))
 
-(defn- axis-result [axis base-count in-favour fraction comparison]
+(defn- axis-result [{:keys [axis base fraction comparison]} base-count in-favour]
   (let [integral? (contains? integral-axes axis)]
     {:axis axis
+     :counted-against base
      :base base-count
      :in-favour in-favour
+     :fraction fraction
      :required (required base-count fraction comparison integral?)
      :met? (meets? in-favour base-count fraction comparison)
      :on-boundary? (on-boundary? in-favour base-count fraction)}))
+
+;; ----------------------------- tally -----------------------------
+
+(defn- fallback-for
+  "Some statutes let a failed resolution be re-voted at once under a
+  lower majority (FRA article 25-1). This reports only that the
+  statutory PRECONDITION is met. It never applies the fallback: the
+  second ballot is an event that either happened or did not, and
+  inferring it would manufacture a vote."
+  [rule total in-favour passed?]
+  (when-let [{:keys [threshold axes] :as fb} (:fallback rule)]
+    (when-not passed?
+      (when (every? (fn [axis] (meets? (get in-favour axis) (get total axis) threshold :at-least))
+                    axes)
+        {:available? true
+         :article (:article fb)
+         :to (:to fb)
+         :threshold threshold
+         :note (:note fb)}))))
 
 (defn tally
   "Judge one resolution. Returns a full, auditable verdict -- never a
@@ -188,47 +286,56 @@
   `input`:
     :total       {axis -> count}   -- every member
     :attending   {axis -> count}   -- present (incl. proxies and
-                                      written votes: 第39条第2項 counts
-                                      both as attendance)
+                                      written votes where the statute
+                                      counts them as attendance, e.g.
+                                      JPN 第39条第2項)
+    :cast        {axis -> count}   -- votes actually cast (abstentions
+                                      excluded); required by rules
+                                      counting `abgegebene Stimmen` or
+                                      `voix exprimées`
     :in-favour   {axis -> count}
     :exclusion   {:court-ordered? bool :count-by-axis {axis -> n}}
     :relaxation-conditions #{..}
-    :bylaw-override {:fraction {..} :recorded? bool :provision \"..\"}"
+    :bylaw-override {:fraction {..} :recorded? bool :provision \"..\"
+                     :instrument :agreement|:bylaw|:resolution}"
   [rule input]
   (when (nil? rule)
     (throw (ex-info "resolution/tally: no statutory rule -- the caller must HOLD, not guess" {})))
   (validate! rule input)
   (let [[total exclusion-note] (excluded-base (:total input) (:exclusion input))
-        attending (:attending input)
+        counts {:total total :attending (:attending input) :cast (:cast input)}
         eff (effective-fraction rule input)
-        fraction (:fraction eff)
-        comparison (:comparison rule)
-        base-map (if (= :attending (:base rule)) attending total)
+        axes-spec (normalize-axes rule (:fraction eff))
         quorum (when-let [q (:quorum rule)]
                  (let [rs (mapv (fn [axis]
-                                  (axis-result axis (get total axis) (get attending axis)
-                                               (:fraction q) (:comparison q)))
+                                  (axis-result {:axis axis :base :attending
+                                                :fraction (:fraction q) :comparison (:comparison q)}
+                                               (get total axis) (get (:attending input) axis)))
                                 (:axes q))]
                    {:required-of :total
                     :fraction (:fraction q)
                     :comparison (:comparison q)
                     :axes rs
                     :met? (every? :met? rs)}))
-        axes (mapv (fn [axis]
-                     (axis-result axis (get base-map axis) (get (:in-favour input) axis)
-                                  fraction comparison))
-                   (:axes rule))
+        axes (mapv (fn [spec]
+                     (axis-result spec
+                                  (get (get counts (:base spec)) (:axis spec))
+                                  (get (:in-favour input) (:axis spec))))
+                   axes-spec)
         quorum-ok? (or (nil? quorum) (:met? quorum))
-        axes-ok? (every? :met? axes)]
-    {:passed? (and quorum-ok? axes-ok?)
+        axes-ok? (every? :met? axes)
+        passed? (and quorum-ok? axes-ok?)]
+    {:passed? passed?
      :article (:article rule)
      :label (:label rule)
      :base (:base rule)
-     :comparison comparison
+     :bases (vec (distinct (map :counted-against axes)))
+     :comparison (:comparison rule)
      :effective-fraction eff
      :quorum quorum
      :axes axes
      :exclusion exclusion-note
+     :fallback (fallback-for rule total (:in-favour input) passed?)
      :on-boundary? (boolean (some :on-boundary? (concat axes (:axes quorum))))
      :failed-axes (mapv :axis (remove :met? axes))
      :reasons (cond-> []
@@ -239,17 +346,22 @@
 
 (defn explain
   "One-paragraph human explanation of a `tally` verdict, for the audit
-  ledger and the operator console."
-  [{:keys [passed? article label base effective-fraction quorum axes on-boundary?]}]
-  (str label " (" article ") -- 母数: "
-       (if (= :attending base) "出席者" "総数")
-       " / 要件: " (:numer (:fraction effective-fraction)) "/" (:denom (:fraction effective-fraction))
-       " (" (name (:source effective-fraction)) ")"
+  ledger and the operator console. Prints the fraction AND the
+  denominator PER AXIS, because under WEG § 21 Absatz 2 and loi 65-557
+  article 26 those differ between the axes of a single rule -- a line
+  that printed one fraction for the rule would be describing a rule
+  that does not exist."
+  [{:keys [passed? article label quorum axes on-boundary? fallback]}]
+  (str label " (" article ")"
        (when quorum (str " / 定足数: " (if (:met? quorum) "充足" "不足")))
        " / 軸: "
        (str/join "、" (map (fn [a]
                              (str (name (:axis a)) " " (:in-favour a) "/" (:base a)
-                                  " (要 " (:required a) ") " (if (:met? a) "○" "×")))
+                                  " [" (get base-label (:counted-against a) "?") "]"
+                                  " 要 " (:required a)
+                                  " (" (:numer (:fraction a)) "/" (:denom (:fraction a)) ")"
+                                  " " (if (:met? a) "○" "×")))
                            axes))
        " => " (if passed? "可決" "否決")
-       (when on-boundary? " [要件ちょうどの軸あり -- 人的確認を推奨]")))
+       (when on-boundary? " [要件ちょうどの軸あり -- 人的確認を推奨]")
+       (when fallback (str " [" (:article fallback) " により同一総会での再決議が可能 -- 自動可決はしない]"))))

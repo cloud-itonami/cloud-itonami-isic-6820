@@ -102,6 +102,35 @@
      :units 32 :total-exclusive-area 2200 :gross-floor-area 3100 :floors 6
      :opening-balance 18000000 :monthly-per-m2 130 :other-transfers-annual 0
      :membership {:owners 32 :voting-rights 2200}
+     :pending-works nil}
+
+    ;; The reserve projection is jurisdiction-agnostic -- escalation and
+    ;; slippage do not care which statute the building sits under. Only
+    ;; the BENCHMARK is Japanese, so `assess-against-benchmark` returns
+    ;; nil for these three and the governor does not pretend otherwise.
+    ;; `:membership` carries whichever axes that jurisdiction counts.
+    "association-6"
+    {:id "association-6" :name "WEG Lindenhof 12"
+     :jurisdiction "DEU" :status :under-management
+     :units 48 :total-exclusive-area 3600 :gross-floor-area 5100 :floors 7
+     :opening-balance 240000 :monthly-per-m2 2.1 :other-transfers-annual 0
+     :membership {:owners 48 :co-ownership-shares 1000}
+     :pending-works nil}
+
+    "association-7"
+    {:id "association-7" :name "Comunidad de Propietarios Ronda del Mar 8"
+     :jurisdiction "ESP" :status :under-management
+     :units 36 :total-exclusive-area 2900 :gross-floor-area 4100 :floors 6
+     :opening-balance 90000 :monthly-per-m2 1.4 :other-transfers-annual 0
+     :membership {:owners 36 :voting-rights 100}
+     :pending-works nil}
+
+    "association-8"
+    {:id "association-8" :name "Syndicat des copropriétaires 14 rue Lafitte"
+     :jurisdiction "FRA" :status :under-management
+     :units 60 :total-exclusive-area 4200 :gross-floor-area 5900 :floors 8
+     :opening-balance 310000 :monthly-per-m2 1.8 :other-transfers-annual 0
+     :membership {:owners 60 :voting-rights 10000}
      :pending-works nil}}
 
    :plans
@@ -131,7 +160,20 @@
     "association-4"
     {:id "plan-4" :association-id "association-4" :horizon-years 30 :new-build? false
      :works [{:id "p4w1" :label "Facade and roof -- cycle 1" :year 5  :base-cost 150000000 :major-repair? true}
-             {:id "p4w2" :label "Facade and roof -- cycle 2" :year 20 :base-cost 190000000 :major-repair? true}]}}})
+             {:id "p4w2" :label "Facade and roof -- cycle 2" :year 20 :base-cost 190000000 :major-repair? true}]}
+    "association-6"
+    {:id "plan-6" :association-id "association-6" :horizon-years 25 :new-build? false
+     :works [{:id "p6w1" :label "Fassade und Dach -- Erhaltung" :year 6  :base-cost 900000 :major-repair? true}
+             {:id "p6w2" :label "Heizungsanlage" :year 14 :base-cost 420000}
+             {:id "p6w3" :label "Fassade -- zweiter Zyklus" :year 22 :base-cost 1000000 :major-repair? true}]}
+    "association-7"
+    {:id "plan-7" :association-id "association-7" :horizon-years 20 :new-build? false
+     :works [{:id "p7w1" :label "Rehabilitación de fachada" :year 5 :base-cost 480000 :major-repair? true}
+             {:id "p7w2" :label "Sustitución del ascensor" :year 13 :base-cost 260000}]}
+    "association-8"
+    {:id "plan-8" :association-id "association-8" :horizon-years 25 :new-build? false
+     :works [{:id "p8w1" :label "Ravalement de façade" :year 7 :base-cost 1100000 :major-repair? true}
+             {:id "p8w2" :label "Réfection de la toiture" :year 16 :base-cost 700000 :major-repair? true}]}}})
 
 ;; ----------------------------- shared commit logic -----------------------------
 

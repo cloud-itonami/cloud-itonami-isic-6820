@@ -2,16 +2,47 @@
   (:require [clojure.test :refer [deftest is testing]]
             [realty.kumiai.facts :as f]))
 
-(deftest coverage-reports-two-numbers-and-they-differ
-  ;; Reporting only "4 jurisdictions covered" would overstate this
-  ;; actor fourfold: only one of them can have a resolution judged at
-  ;; all. The second number is the honest one, so the test asserts they
-  ;; are not the same.
+(deftest coverage-separates-covered-from-judgeable
+  ;; Reporting only "N jurisdictions covered" would overstate this
+  ;; actor: only some of them can have a resolution judged at all. The
+  ;; test asserts the two numbers are not the same, so collapsing them
+  ;; breaks a test rather than passing one.
   (let [c (f/coverage)]
-    (is (= 4 (:covered c)))
-    (is (= ["JPN"] (:with-statutory-resolution-thresholds c)))
-    (is (= ["DEU" "GBR" "USA-NY"] (:without-statutory-resolution-thresholds c)))
-    (is (not= (:covered c) (count (:with-statutory-resolution-thresholds c))))))
+    (is (= (count f/catalog) (:covered c)))
+    (is (= ["DEU" "ESP" "FRA" "JPN"] (:with-statutory-resolution-thresholds c)))
+    (is (< (count (:with-statutory-resolution-thresholds c)) (:covered c)))))
+
+(deftest coverage-splits-unreadable-from-nonexistent
+  ;; The load-bearing distinction. USA-NY and GBR have no national
+  ;; table to read; SGP, AUS-NSW, ITA and CHN have one this actor could
+  ;; not fetch. Both end up without `:resolutions`, and the governor
+  ;; holds either way -- but reporting them as one category would say
+  ;; that reading harder cannot help, which is false for four of them.
+  (let [c (f/coverage)
+        by (:without-thresholds-by-reason c)]
+    (is (= ["AUS-NSW" "CHN" "ITA" "SGP"] (:unreadable-sources c)))
+    (is (= ["USA-NY"] (:no-statutory-threshold-table by)))
+    (is (= ["GBR"] (:no-unit-owner-vote by)))
+    (is (not-any? #{:unstated} (keys by)))))
+
+(deftest an-unreadable-source-records-the-attempt-not-a-guess
+  ;; A remembered threshold and a fetched one must not be storable in
+  ;; the same field, so the unverified entries use a DIFFERENT key.
+  (doseq [j ["SGP" "AUS-NSW" "ITA" "CHN"]]
+    (let [b (f/spec-basis j)]
+      (is (nil? (:legal-basis b)) j)
+      (is (some? (:legal-basis-unverified b)) j)
+      (is (nil? (:resolutions b)) j)
+      (is (some? (get-in b [:source-attempt :status])) j)
+      (is (= "2026-09-06" (get-in b [:source-attempt :on])) j))))
+
+(deftest a-two-hundred-response-is-not-a-successful-read
+  ;; ITA and CHN answered 200 with a navigation frame and a news page.
+  ;; Recording those as reachable would be the "measured nothing looks
+  ;; like measured fine" failure in its purest form.
+  (doseq [j ["ITA" "CHN"]]
+    (is (= 200 (get-in (f/spec-basis j) [:source-attempt :status])) j)
+    (is (= :source-unreachable (f/unverified-reason j)) j)))
 
 (deftest an-unknown-jurisdiction-has-no-spec-basis
   (is (nil? (f/spec-basis "ATL")))
@@ -22,7 +53,16 @@
   (is (some? (f/spec-basis "USA-NY")))
   (is (nil? (f/resolution-rule "USA-NY" :ordinary)))
   (is (nil? (f/resolution-rule "GBR" :common-area-major-change)))
-  (is (nil? (f/resolution-rule "DEU" :ordinary))))
+  (is (nil? (f/resolution-rule "SGP" :ordinary))))
+
+(deftest only-japan-carries-a-reserve-benchmark
+  ;; The MLIT bands are Japanese and apply nowhere else. Germany's
+  ;; Erhaltungsrücklage has no statutory minimum, Spain's fondo de
+  ;; reserva is a percentage of the budget rather than a rate per square
+  ;; metre, and France's fonds de travaux publishes no scale.
+  (is (some? (f/reserve-guideline "JPN")))
+  (doseq [j ["DEU" "ESP" "FRA" "USA-NY" "GBR" "SGP"]]
+    (is (nil? (f/reserve-guideline j)) j)))
 
 (deftest japanese-rules-carry-the-denominator-the-statute-counts
   (testing "ordinary resolutions count the attending, since 2026-04-01"
@@ -79,5 +119,7 @@
 
 (deftest jurisdiction-summary-says-when-thresholds-are-unavailable
   (is (re-find #"決議要件 9 種" (f/jurisdiction-summary "JPN")))
-  (is (re-find #"判定不能" (f/jurisdiction-summary "USA-NY")))
+  (is (re-find #"規約/宣言に依る" (f/jurisdiction-summary "USA-NY")))
+  (is (re-find #"leasehold" (f/jurisdiction-summary "GBR")))
+  (is (re-find #"一次資料を取得できていない" (f/jurisdiction-summary "SGP")))
   (is (re-find #"NO SPEC-BASIS" (f/jurisdiction-summary "ATL"))))
