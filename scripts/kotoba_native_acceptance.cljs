@@ -37,6 +37,9 @@
 ;; not a run that found nothing wrong.
 (ns kotoba.native-acceptance
   (:require [realty.kumiai.resolution :as oracle]
+            [realty.kumiai.governor :as gov]
+            [realty.kumiai.kumiaillm :as llm]
+            [realty.kumiai.store :as store]
             ["node:child_process" :as cp]
             ["node:fs" :as fs]
             ["node:os" :as os]
@@ -142,6 +145,42 @@
           (let [t (traced)]
             (println (str "JVM-INVOCATIONS\t" (count t)))
             (doseq [line t] (println (str "  " line)))
+            ;; ---- works_core: qualified on wasm, BLOCKED on native ----
+            (let [wsrc (.resolve path root "kotoba" "kumiai" "works_core.kotoba")
+                  wout (.join path work "works.wasm")
+                  wc (sh amu ["compile" wsrc "--jvm-free" "--target" "wasm32-browser" "--output" wout])]
+              (when-not (re-find #":ok true" (:out wc)) (fail (str "works_core wasm compile: " (:out wc))))
+              ;; RUN it. A slice that only compiles has not been accepted --
+              ;; native compiled this same module and answered wrongly.
+              (let [runner (.join path work "run-works.mjs")
+                    host (.join path amu-root "runtime" "browser-host.mjs")]
+                (.writeFileSync fs runner
+                                (str "import { instantiateKotoba } from '" host "';\n"
+                                     "import { readFileSync } from 'node:fs';\n"
+                                     "const r = await instantiateKotoba(readFileSync('" wout "'), {});\n"
+                                     "console.log(String(r.instance.exports.main()));\n"))
+                (let [r (sh "node" [runner])
+                      wf (js/parseInt (.replace (.trim (:out r)) "n" "") 10)]
+                  (when (js/isNaN wf) (fail (str "works_core produced no count: " (pr-str (:out r)))))
+                  (println (str "WASM\twasm32-browser\tworks-core-self-check-failures\t" wf))
+                  (when (pos? wf) (fail (str wf " works_core self-checks failed on wasm")))))
+              ;; and the probe that keeps the native block honest
+              (let [probe (.join path work "kwprobe.kotoba")
+                    pk (.join path work "kwprobe.kexe")
+                    pb (.join path work "kwprobe.bin")]
+                (.writeFileSync fs probe
+                                "(ns kwprobe (:export [main]))\n(defn main [] :i64 (if (= :passed :passed) 1 0))\n")
+                (let [c (sh amu ["compile" probe "--jvm-free" "--target" native-target "--output" pk])]
+                  (when-not (re-find #":ok true" (:out c)) (fail (str "probe compile: " (:out c))))
+                  (let [x (sh amu ["extract-native" pk "--symbol" "main" "--output" pb])
+                        off (second (re-find #":offset (\d+)" (:out x)))
+                        v (js/parseInt (.trim (:out (sh loader [pb off "0" isa "-"]))) 10)]
+                    (println (str "NATIVE-KEYWORD-EQUALITY\t" v "\t(1 = correct, 0 = the amu#835 defect)"))
+                    (when (= 1 v)
+                      (fail (str "kotoba-lang/amu#835 appears FIXED: native keyword equality now answers "
+                                 "correctly. Add aarch64-macos back to works_core.kotoba and delete this "
+                                 "probe — the block exists only because of that defect.")))))))
+
             (cond
               (seq t) (fail "the JVM-free path invoked a JDK binary")
               (pos? failures) (fail (str failures " self-checks failed inside the guest"))

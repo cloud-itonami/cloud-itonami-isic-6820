@@ -1,0 +1,153 @@
+(ns kotoba.kumiai.works-core
+  ;; The commissioning step of the 管理組合 actor, as product semantics:
+  ;;
+  ;;     state + event -> next state + an INERT effect
+  ;;
+  ;; This is the step where the association signs a real contract with a real
+  ;; contractor and pays for it out of other owners' reserve contributions, so
+  ;; it is the step whose refusals matter. `realty.kumiai.governor` holds it on
+  ;; four grounds; the same four are decided here, in the same order, and the
+  ;; verdict carries the reason rather than a boolean.
+  ;;
+  ;; == Why this exists ==
+  ;;
+  ;; The README used to say this component was blocked because it rests on
+  ;; atoms, protocols and defrecord. Measured 2026-09-06, all three run on
+  ;; `aarch64-macos`. What is actually blocked is the EFFECT -- the ledger
+  ;; write, the sequence bump -- and the way to show that is to move the part
+  ;; that is not an effect and leave the part that is.
+  ;;
+  ;; So `commission` decides and describes; it never writes. The outcome names
+  ;; the effect the host should perform (`:effect/draft-works-order`) and the
+  ;; value it should carry. Nothing here can reach a store, and the compiled
+  ;; module asks the host for no capability at all.
+  ;;
+  ;; == QUALIFIED ON wasm32-browser. NATIVE IS BLOCKED, AND WHY ==
+  ;;
+  ;; This module compiles to `aarch64-macos` and runs there and gives the
+  ;; WRONG ANSWER, because keyword equality on that backend is always false:
+  ;;
+  ;;   (if (= :passed :passed) 1 0)   wasm32-browser -> 1   aarch64-macos -> 0
+  ;;
+  ;; measured 2026-09-06 through `tools/kexe_loader.c`, with i64 equality
+  ;; correct on the same build, so it is not the `if` lowering or the loader.
+  ;; Reported as kotoba-lang/amu#835.
+  ;;
+  ;; Every branch below turns on a keyword -- `:passed`, and the reason the
+  ;; outcome carries -- so on native every one of them takes the wrong path.
+  ;; The module's own `main` returned 10 failures out of 11 the first time it
+  ;; ran there, which is the only reason this was caught rather than shipped.
+  ;;
+  ;; The status is NOT re-modelled as an i64 to get past it. Q9 says an
+  ;; unsupported target is BLOCKED rather than a reason to fall back, and
+  ;; reshaping a domain around a backend defect hides the defect instead of
+  ;; fixing it: a status is a keyword because that is what it is.
+  ;;
+  ;; REMOVAL CONDITION, mechanised rather than remembered:
+  ;; `scripts/kotoba_native_acceptance.cljs` carries a probe that asserts the
+  ;; defect still reproduces. When amu fixes it the probe goes RED, and that
+  ;; is the signal to add `aarch64-macos` here.
+  ;;
+  ;; == The double-commissioning guard is a state question, not a lookup ==
+  ;;
+  ;; `realty.kumiai.store` clears `:pending-works` when an order is drafted, so
+  ;; a second attempt meets the same "nothing pending" branch a never-had-one
+  ;; association meets. That is state, and state is what this function is
+  ;; about: `:already-commissioned` is a fact about the world the host reads
+  ;; once and hands over, and `:cleared` in the outcome is the next state the
+  ;; host should write back.
+  (:export [commission admitted reason order-value cleared main]))
+
+(defrecord Pending [works-id :string contract-value :i64 resolution-id :string])
+(defrecord Resolution [status :keyword budget :i64 funding :i64])
+(defrecord Reserve [deficit :i64 already-commissioned :bool])
+(defrecord Outcome [admitted :bool reason :keyword order-value :i64 cleared :bool])
+
+(defn commission
+  [pending [:record :kotoba.kumiai.works-core/Pending
+            [[:works-id :string] [:contract-value :i64] [:resolution-id :string]]]
+   resolution [:record :kotoba.kumiai.works-core/Resolution
+               [[:status :keyword] [:budget :i64] [:funding :i64]]]
+   reserve [:record :kotoba.kumiai.works-core/Reserve
+            [[:deficit :i64] [:already-commissioned :bool]]]]
+  ;; Order matters and mirrors the governor's: a works package whose
+  ;; resolution did not pass is unauthorised before anything about money is
+  ;; asked, and an order already drafted is refused before its value is
+  ;; compared to a budget it may well be inside.
+  (if (not (= (get resolution :status) :passed))
+    (->Outcome false :works-not-authorised 0 false)
+    (if (get reserve :already-commissioned)
+      (->Outcome false :double-commissioning 0 false)
+      (if (> (get pending :contract-value) (get resolution :budget))
+        (->Outcome false :works-exceeds-resolution-budget 0 false)
+        (if (> (get reserve :deficit) (get resolution :funding))
+          (->Outcome false :reserve-cannot-fund-works 0 false)
+          ;; Admitted. The effect is described, not performed: draft the
+          ;; works order for this value and clear the pending package.
+          (->Outcome true :effect/draft-works-order (get pending :contract-value) true))))))
+
+(defn admitted [o [:record :kotoba.kumiai.works-core/Outcome
+                   [[:admitted :bool] [:reason :keyword] [:order-value :i64] [:cleared :bool]]]] :bool
+  (get o :admitted))
+
+(defn reason [o [:record :kotoba.kumiai.works-core/Outcome
+                 [[:admitted :bool] [:reason :keyword] [:order-value :i64] [:cleared :bool]]]] :keyword
+  (get o :reason))
+
+(defn order-value [o [:record :kotoba.kumiai.works-core/Outcome
+                      [[:admitted :bool] [:reason :keyword] [:order-value :i64] [:cleared :bool]]]] :i64
+  (get o :order-value))
+
+(defn cleared [o [:record :kotoba.kumiai.works-core/Outcome
+                  [[:admitted :bool] [:reason :keyword] [:order-value :i64] [:cleared :bool]]]] :bool
+  (get o :cleared))
+
+;; --- self-check ------------------------------------------------------------
+;; Returns the NUMBER of failures, so the native exit value is the verdict and
+;; one regression is distinguishable from a broken build.
+
+(defn expect-kw [actual :keyword expected :keyword] :i64
+  (if (= actual expected) 0 1))
+
+(defn expect-bool [actual :bool expected :bool] :i64
+  (if actual (if expected 0 1) (if expected 1 0)))
+
+(defn expect-i64 [actual :i64 expected :i64] :i64
+  (if (= actual expected) 0 1))
+
+(defn main [] :i64
+  (let [pending (->Pending "works-1" 120 "res-1")
+        big (->Pending "works-2" 200 "res-1")
+        exact (->Pending "works-3" 150 "res-1")
+        passed (->Resolution :passed 150 0)
+        failed (->Resolution :failed 150 0)
+        funded (->Resolution :passed 150 500)
+        clean (->Reserve 0 false)
+        again (->Reserve 0 true)
+        short (->Reserve 409 false)]
+    (+
+     ;; the clean path: admitted, the order carries the contract value, and
+     ;; the pending package is cleared
+     (expect-bool (admitted (commission pending passed clean)) true)
+     (expect-kw (reason (commission pending passed clean)) :effect/draft-works-order)
+     (expect-i64 (order-value (commission pending passed clean)) 120)
+     (expect-bool (cleared (commission pending passed clean)) true)
+     ;; a resolution that did not pass is unauthorised, and nothing is cleared
+     (expect-kw (reason (commission pending failed clean)) :works-not-authorised)
+     (expect-bool (cleared (commission pending failed clean)) false)
+     ;; the second attempt at the same works
+     (expect-kw (reason (commission pending passed again)) :double-commissioning)
+     ;; over the budget the meeting actually voted
+     (expect-kw (reason (commission big passed clean)) :works-exceeds-resolution-budget)
+     ;; EXACTLY at the voted budget is admitted -- the rule is "exceeds", and
+     ;; without this case `>` and `>=` are indistinguishable here. Measured:
+     ;; flipping the comparison left the self-check green until this line
+     ;; existed, which is what a boundary-free table buys you.
+     (expect-bool (admitted (commission exact passed clean)) true)
+     (expect-i64 (order-value (commission exact passed clean)) 150)
+     ;; a reserve that cannot pay, with no borrowing resolved to cover it
+     (expect-kw (reason (commission pending passed short)) :reserve-cannot-fund-works)
+     ;; ... and the same deficit WITH funding resolved passes
+     (expect-bool (admitted (commission pending funded short)) true)
+     ;; order matters: an unauthorised resolution is refused before the budget
+     (expect-kw (reason (commission big failed clean)) :works-not-authorised))))
