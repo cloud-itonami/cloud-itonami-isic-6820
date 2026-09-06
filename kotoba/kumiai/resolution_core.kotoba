@@ -38,7 +38,7 @@
   ;; caller and belongs in its own slice rather than smuggled into this one.
   ;; `explain` builds a Japanese sentence with `str/join`, and the string
   ;; surface here is byte-addressed.
-  (:export [axis-met axis-boundary axis-required judge-1 judge-2 judge-3]))
+  (:export [axis-met axis-boundary axis-required judge-1 judge-2 judge-3 main]))
 
 ;; --- one axis -------------------------------------------------------------
 
@@ -84,3 +84,65 @@
       (if a1 (if a2 a3 false) false)
       false)
     false))
+
+;; --- self-check ------------------------------------------------------------
+;;
+;; `main` is the JVM-free acceptance path. It re-derives the boundary cases the
+;; six statutes actually turn on and returns the NUMBER OF FAILURES, so the
+;; process exit code is the verdict:
+;;
+;;   amu compile <this> --jvm-free --target aarch64-macos --output rc.kexe
+;;   amu compile <this> --jvm-free --target wasm32-browser --output rc.wasm
+;;
+;; `amu test` is deliberately not used: it routes to `clojure -M:run` and so
+;; brings back the JDK this module exists to leave behind. Measured
+;; 2026-09-06 with java/javac/clojure/clj denied on PATH -- `amu test` was the
+;; only amu subcommand that tripped the denial.
+;;
+;; Returning a COUNT rather than a boolean is deliberate: a self-check that can
+;; only say "something failed" cannot tell a single regression from a broken
+;; build.
+
+(defn expect-bool [actual :bool expected :bool] :i64
+  (if actual (if expected 0 1) (if expected 1 0)))
+
+(defn expect-i64 [actual :i64 expected :i64] :i64
+  (if (= actual expected) 0 1))
+
+(defn main [] :i64
+  (+
+   ;; 過半数 is strict: exactly half fails, one more passes.
+   ;; JPN 第39条第1項 / FRA article 26 (members) / DEU § 21 Abs. 2 (shares).
+   (expect-bool (axis-met 50 100 1 2 true) false)
+   (expect-bool (axis-met 51 100 1 2 true) true)
+   (expect-bool (axis-met 5000 10000 1 2 true) false)
+   ;; N分のM以上 is inclusive: exactly the fraction passes.
+   ;; JPN 第17条第1項 / SGP s 2(3) / FRA article 26 (voices).
+   (expect-bool (axis-met 75 100 3 4 false) true)
+   (expect-bool (axis-met 74 100 3 4 false) false)
+   (expect-bool (axis-met 3000 4000 3 4 false) true)
+   (expect-bool (axis-met 6000 9000 2 3 false) true)
+   ;; Two thirds of 99 is exact here and rounds under floating point.
+   ;; JPN 第61条第5項.
+   (expect-bool (axis-met 66 99 2 3 false) true)
+   (expect-bool (axis-met 65 99 2 3 false) false)
+   ;; Unanimity, and one short of it. ESP 17.6.
+   (expect-bool (axis-met 100 100 1 1 false) true)
+   (expect-bool (axis-met 99 100 1 1 false) false)
+   ;; The boundary flag fires on the line and nowhere else.
+   (expect-bool (axis-boundary 50 100 1 2) true)
+   (expect-bool (axis-boundary 51 100 1 2) false)
+   (expect-bool (axis-boundary 66 99 2 3) true)
+   ;; The smallest clearing tally, strict and inclusive.
+   (expect-i64 (axis-required 100 1 2 true) 51)
+   (expect-i64 (axis-required 100 3 4 false) 75)
+   (expect-i64 (axis-required 99 2 3 false) 66)
+   (expect-i64 (axis-required 10000 1 2 true) 5001)
+   ;; The fold: a quorum or a notice period that failed sinks the vote even
+   ;; when every axis cleared.
+   (expect-bool (judge-1 true true true) true)
+   (expect-bool (judge-1 false true true) false)
+   (expect-bool (judge-1 true false true) false)
+   (expect-bool (judge-2 true true true false) false)
+   (expect-bool (judge-3 true true true true true) true)
+   (expect-bool (judge-3 true true true false true) false)))
