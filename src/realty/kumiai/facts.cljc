@@ -73,7 +73,7 @@
   kind, and it changed within the last six months. That is precisely
   the thing an LLM has no way to know it is wrong about, and precisely
   what `realty.kumiai.resolution` makes checkable."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 ;; --------------------------------------------------------------------
 ;; resolution rules

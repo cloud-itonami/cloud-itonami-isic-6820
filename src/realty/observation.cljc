@@ -93,7 +93,7 @@
   management fee should be, not an offer, and not an endorsement of any
   manager or scheme."
   (:require [clojure.set :as set]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [realty.facts :as facts]))
 
 ;; --- identity ---------------------------------------------------------------

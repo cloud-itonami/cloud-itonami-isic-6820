@@ -88,7 +88,7 @@
   tres quintas partes` is `:at-least`. A tally that lands EXACTLY on
   the line is flagged `:on-boundary?` so a human sees it -- one proxy
   form flips such a vote."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 ;; ----------------------------- exact fraction comparison -----------------------------
 

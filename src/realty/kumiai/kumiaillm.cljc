@@ -25,7 +25,7 @@
   recomputing it."
   (:require #?(:clj  [clojure.edn :as edn]
                :cljs [cljs.reader :as edn])
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [realty.kumiai.facts :as facts]
             [realty.kumiai.reserve :as reserve]
             [realty.kumiai.resolution :as resolution]
