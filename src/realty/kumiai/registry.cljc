@@ -15,7 +15,7 @@
   independently before this namespace is ever reached. A registry that
   both computed and recorded the verdict would have nothing to be
   checked against."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn- unsigned-certificate [kind subject record-id]
   {"@context" ["https://www.w3.org/ns/credentials/v2"]
@@ -52,7 +52,7 @@
     (throw (ex-info "resolution: verdict (a resolution/tally map) required" {})))
   (when (< sequence 0)
     (throw (ex-info "resolution: sequence must be >= 0" {})))
-  (let [number (str (str/upper-case jurisdiction) "-RES-" (zero-pad sequence 6))
+  (let [number (str (str/upper jurisdiction) "-RES-" (zero-pad sequence 6))
         record {"record_id" number
                 "kind" "resolution-minute-draft"
                 "association_id" association-id
@@ -111,7 +111,7 @@
     (throw (ex-info "works-order: resolution_number required -- no order without a minute" {})))
   (when (< sequence 0)
     (throw (ex-info "works-order: sequence must be >= 0" {})))
-  (let [number (str (str/upper-case jurisdiction) "-WRK-" (zero-pad sequence 6))
+  (let [number (str (str/upper jurisdiction) "-WRK-" (zero-pad sequence 6))
         record {"record_id" number
                 "kind" "works-order-draft"
                 "association_id" association-id

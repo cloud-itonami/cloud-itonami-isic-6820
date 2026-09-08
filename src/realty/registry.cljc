@@ -32,7 +32,7 @@
   executing the contract itself (those are `realty.operation`'s
   `:fee/pay` and `:contract/execute`, always human-gated -- see README
   `Actuation`)."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn- unsigned-certificate
   "Every certificate this actor produces is UNSIGNED -- signature is the
@@ -86,7 +86,7 @@
     (throw (ex-info "fee-payment: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "fee-payment: sequence must be >= 0" {})))
-  (let [fee-number (str (str/upper-case jurisdiction) "-FEE-" (zero-pad sequence 6))
+  (let [fee-number (str (str/upper jurisdiction) "-FEE-" (zero-pad sequence 6))
         record {"record_id" fee-number
                 "kind" "fee-payment-draft"
                 "property_id" property-id
@@ -115,7 +115,7 @@
     (throw (ex-info "contract-execution: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "contract-execution: sequence must be >= 0" {})))
-  (let [contract-number (str (str/upper-case jurisdiction) "-CTR-" (zero-pad sequence 6))
+  (let [contract-number (str (str/upper jurisdiction) "-CTR-" (zero-pad sequence 6))
         record {"record_id" contract-number
                 "kind" "contract-execution-draft"
                 "property_id" property-id
