@@ -105,7 +105,7 @@ The judgement core builds and is accepted **without a JDK anywhere in the
 loop** — `kotoba compile` and `amu native`, nothing else:
 
 ```bash
-nbb --classpath src:scripts scripts/kotoba_native_acceptance.cljk
+kbb --backend sci --classpath src:scripts scripts/kotoba_native_acceptance.cljk
 ```
 
 That one command builds a directory of stub `java` / `javac` / `clojure` /
@@ -125,7 +125,7 @@ Exit 0 pass · 1 fail · **2 could-not-measure** — a run that could not
 build the toolchain is not a run that found nothing wrong.
 
 **The denial is not decorative.** `amu test` is deliberately absent from
-that list: measured 2026-09-06 it routes to `clojure -M:run` and is the
+that list: measured 2026-09-06 it routes to `kbb -M:run` and is the
 only amu subcommand that trips the trace, which is also the evidence
 that the trace detects anything at all.
 
@@ -175,10 +175,10 @@ migrated. The `.cljc` suite below is the oracle, and Q9 marks a JVM
 oracle as historical and non-gating: the gate is the command above.
 
 ```bash
-clojure -M:dev:run          # fee-services actor: two clean lifecycles + seven HARD-hold cases
-clojure -M:dev:run-kumiai   # 管理組合 actor: reserve projection under escalation/slippage, a general-meeting resolution, a works order, and eleven HARD-hold cases
-clojure -M:dev:test         # governor contract · phase invariants · store parity · registry conformance · facts coverage (both actors)
-clojure -M:lint             # clj-kondo (errors fail; CI mirrors this)
+kbb -M:dev:run          # fee-services actor: two clean lifecycles + seven HARD-hold cases
+kbb -M:dev:run-kumiai   # 管理組合 actor: reserve projection under escalation/slippage, a general-meeting resolution, a works order, and eleven HARD-hold cases
+kbb -M:dev:test         # governor contract · phase invariants · store parity · registry conformance · facts coverage (both actors)
+kbb -M:lint             # clj-kondo (errors fail; CI mirrors this)
 ```
 
 ## Robotics premise
@@ -323,7 +323,7 @@ it out of a reserve fund it has been accumulating for decades.
 
 They are different legal actors under different statutes, so they get
 separate catalogs, separate governors and separate stores rather than
-one blurred table. `clojure -M:dev:run-kumiai` walks the whole thing.
+one blurred table. `kbb -M:dev:run-kumiai` walks the whole thing.
 
 ### The question it answers
 

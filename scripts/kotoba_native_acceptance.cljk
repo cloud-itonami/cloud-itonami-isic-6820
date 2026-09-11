@@ -1,4 +1,4 @@
-#!/usr/bin/env nbb
+#!/usr/bin/env kbb
 ;; JVM-free acceptance for the Kotoba judgement core.
 ;;
 ;; Q9 (CLAUDE.md) asks that build AND acceptance stay off the JDK, and that
@@ -22,7 +22,7 @@
 ;; broken build.
 ;;
 ;; Then it asserts the trace file is EMPTY. `amu test` is deliberately not in
-;; the list: measured 2026-09-06 it routes to `clojure -M:run`, and it is the
+;; the list: measured 2026-09-06 it routes to `kbb -M:run`, and it is the
 ;; only amu subcommand that trips the denial.
 ;;
 ;; It then runs ORACLE PARITY, also without a JVM: the `.cljc` the actor runs

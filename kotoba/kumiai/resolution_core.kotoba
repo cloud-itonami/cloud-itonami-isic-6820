@@ -94,7 +94,7 @@
 ;;   amu compile <this> --jvm-free --target aarch64-macos --output rc.kexe
 ;;   amu compile <this> --jvm-free --target wasm32-browser --output rc.wasm
 ;;
-;; `amu test` is deliberately not used: it routes to `clojure -M:run` and so
+;; `amu test` is deliberately not used: it routes to `kbb -M:run` and so
 ;; brings back the JDK this module exists to leave behind. Measured
 ;; 2026-09-06 with java/javac/clojure/clj denied on PATH -- `amu test` was the
 ;; only amu subcommand that tripped the denial.

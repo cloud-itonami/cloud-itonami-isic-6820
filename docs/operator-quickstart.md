@@ -11,7 +11,7 @@
 Walk through two clean lifecycles (property intake → fee payment and contract execution) and seven HARD-hold cases:
 
 ```bash
-clojure -M:dev:run
+kbb -M:dev:run
 ```
 
 The demo driver (`src/realty/sim.cljk`) shows the OperationActor, the Real-Estate Fee-Services Governor, and how high-stakes actions (`:fee/pay`, `:contract/execute`) are never autonomous.
@@ -21,7 +21,7 @@ The demo driver (`src/realty/sim.cljk`) shows the OperationActor, the Real-Estat
 Verify governor contract, phase invariants, store parity, registry conformance, and facts coverage:
 
 ```bash
-clojure -M:dev:test
+kbb -M:dev:test
 ```
 
 Key test modules:
@@ -35,7 +35,7 @@ Key test modules:
 Check for static-analysis errors (fails CI if any):
 
 ```bash
-clojure -M:lint
+kbb -M:lint
 ```
 
 ## Governor location
@@ -100,7 +100,7 @@ See `docs/operator-guide.md` for minimum production controls.
 
 1. **Read the README** (`../README.md`) for full architecture and context.
 2. **Read the ADR** (`docs/adr/0001-architecture.md`) for design decisions.
-3. **Run the demo**: `clojure -M:dev:run`
+3. **Run the demo**: `kbb -M:dev:run`
 4. **Explore the Governor**: `src/realty/governor.cljk` and its tests
 5. **Fork and adapt**: Override the fee-rate formula, extend the jurisdiction catalog, add robotics integrations
 
