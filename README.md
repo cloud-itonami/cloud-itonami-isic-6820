@@ -64,7 +64,7 @@ construction.** Two independent layers enforce this (`realty.
 governor`'s `:actuation/pay-fee`/`:actuation/execute-contract` high-
 stakes gate and `realty.phase`'s phase table, which never puts `:fee/
 pay`/`:contract/execute` in any phase's `:auto` set) -- see `realty.
-phase`'s docstring and `test/realty/phase_test.clj`'s `fee-pay-never-
+phase`'s docstring and `test/realty/phase_test.cljk`'s `fee-pay-never-
 auto-at-any-phase`/`contract-execute-never-auto-at-any-phase`. The
 actor may draft, check and recommend; a human property manager is
 always the one who actually pays a fee or executes a contract.
@@ -105,7 +105,7 @@ The judgement core builds and is accepted **without a JDK anywhere in the
 loop** — `kotoba compile` and `amu native`, nothing else:
 
 ```bash
-nbb --classpath src:scripts scripts/kotoba_native_acceptance.cljs
+nbb --classpath src:scripts scripts/kotoba_native_acceptance.cljk
 ```
 
 That one command builds a directory of stub `java` / `javac` / `clojure` /
@@ -224,28 +224,28 @@ actors have toward `kotoba-lang/insurance`.
 
 | File | Role |
 |---|---|
-| `src/realty/store.cljc` | **Store** protocol -- `MemStore` ‖ `DatomicStore` (`langchain.db`) + append-only audit ledger + fee-payment/contract-execution history. No separate party concept -- a pending contract lives INLINE on the property record, and executing it clears the field (doubling as the double-execution guard) |
-| `src/realty/registry.cljc` | Fee-payment + contract-execution draft records, plus `compute-management-fee` (REAL, simplified fixed-percentage-of-rent formula -- see docstring for what it does not model) |
-| `src/realty/facts.cljc` | Per-jurisdiction property-management disclosure/trust-account catalog with an official spec-basis citation per entry, honest coverage reporting |
-| `src/realty/realtyfeellm.cljc` | **Realty-Fee-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/filing/payment/contract-execution proposals |
-| `src/realty/governor.cljc` | **Real-Estate Fee-Services Governor** -- 7 HARD checks (spec-basis · evidence-incomplete · property-not-under-management · fee-missing · fee-calculation-mismatch, independent EXACT-match recompute · contract-missing · contract-exceeds-authorization, static cap) + double-payment guard + 1 soft (confidence/actuation gate) |
-| `src/realty/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted assess → supervised (payment/execution always human; property intake + fee filing auto-eligible, no capital risk) |
-| `src/realty/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
-| `src/realty/observation.cljc` | **Observation contract** (`fee-observation/1`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
-| `src/realty/sim.cljc` | demo driver |
-| `src/realty/kumiai/facts.cljc` | **管理組合** per-jurisdiction catalog: statutory resolution thresholds for JPN / DEU / ESP / FRA transcribed from each statute's current text, six further jurisdictions recorded as unverified with the reason, + the MLIT reserve-fund guideline values, with three-level honest coverage reporting |
-| `src/realty/kumiai/resolution.cljc` | Exact vote arithmetic: statutory denominator (cast ‖ attending ‖ total), per-axis fraction AND per-axis denominator, quorum stage, instrument overrides, statutory fallback (FRA art. 25-1), 第38条の2 exclusions, boundary flagging |
-| `src/realty/kumiai/reserve.cljc` | Long-term repair plan projection under cost escalation and schedule slippage, deficit + `:unmeasured-outflow`, required-contribution solver, MLIT `Z` / benchmark band / staged-increase verdict |
-| `src/realty/kumiai/registry.cljc` | Resolution-minute + works-order draft records (unsigned) |
-| `src/realty/kumiai/store.cljc` | **Store** protocol for associations/plans/resolutions -- `MemStore` ‖ `DatomicStore`, pending works INLINE (double-commissioning guard) |
-| `src/realty/kumiai/kumiaillm.cljc` | **Kumiai-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor` |
-| `src/realty/kumiai/governor.cljc` | **Condominium-Association Governor** -- 12 HARD checks + 1 soft gate |
-| `src/realty/kumiai/phase.cljc` | **Phase 0→3** -- works commissioning and resolution filing never auto-commit at any phase |
-| `src/realty/kumiai/operation.cljc` | **OperationActor** (kumiai) -- langgraph-clj StateGraph |
-| `src/realty/kumiai/sim.cljc` | 管理組合 demo driver |
+| `src/realty/store.cljk` | **Store** protocol -- `MemStore` ‖ `DatomicStore` (`langchain.db`) + append-only audit ledger + fee-payment/contract-execution history. No separate party concept -- a pending contract lives INLINE on the property record, and executing it clears the field (doubling as the double-execution guard) |
+| `src/realty/registry.cljk` | Fee-payment + contract-execution draft records, plus `compute-management-fee` (REAL, simplified fixed-percentage-of-rent formula -- see docstring for what it does not model) |
+| `src/realty/facts.cljk` | Per-jurisdiction property-management disclosure/trust-account catalog with an official spec-basis citation per entry, honest coverage reporting |
+| `src/realty/realtyfeellm.cljk` | **Realty-Fee-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/filing/payment/contract-execution proposals |
+| `src/realty/governor.cljk` | **Real-Estate Fee-Services Governor** -- 7 HARD checks (spec-basis · evidence-incomplete · property-not-under-management · fee-missing · fee-calculation-mismatch, independent EXACT-match recompute · contract-missing · contract-exceeds-authorization, static cap) + double-payment guard + 1 soft (confidence/actuation gate) |
+| `src/realty/phase.cljk` | **Phase 0→3** -- read-only → assisted intake → assisted assess → supervised (payment/execution always human; property intake + fee filing auto-eligible, no capital risk) |
+| `src/realty/operation.cljk` | **OperationActor** -- langgraph-clj StateGraph |
+| `src/realty/observation.cljk` | **Observation contract** (`fee-observation/1`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
+| `src/realty/sim.cljk` | demo driver |
+| `src/realty/kumiai/facts.cljk` | **管理組合** per-jurisdiction catalog: statutory resolution thresholds for JPN / DEU / ESP / FRA transcribed from each statute's current text, six further jurisdictions recorded as unverified with the reason, + the MLIT reserve-fund guideline values, with three-level honest coverage reporting |
+| `src/realty/kumiai/resolution.cljk` | Exact vote arithmetic: statutory denominator (cast ‖ attending ‖ total), per-axis fraction AND per-axis denominator, quorum stage, instrument overrides, statutory fallback (FRA art. 25-1), 第38条の2 exclusions, boundary flagging |
+| `src/realty/kumiai/reserve.cljk` | Long-term repair plan projection under cost escalation and schedule slippage, deficit + `:unmeasured-outflow`, required-contribution solver, MLIT `Z` / benchmark band / staged-increase verdict |
+| `src/realty/kumiai/registry.cljk` | Resolution-minute + works-order draft records (unsigned) |
+| `src/realty/kumiai/store.cljk` | **Store** protocol for associations/plans/resolutions -- `MemStore` ‖ `DatomicStore`, pending works INLINE (double-commissioning guard) |
+| `src/realty/kumiai/kumiaillm.cljk` | **Kumiai-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor` |
+| `src/realty/kumiai/governor.cljk` | **Condominium-Association Governor** -- 12 HARD checks + 1 soft gate |
+| `src/realty/kumiai/phase.cljk` | **Phase 0→3** -- works commissioning and resolution filing never auto-commit at any phase |
+| `src/realty/kumiai/operation.cljk` | **OperationActor** (kumiai) -- langgraph-clj StateGraph |
+| `src/realty/kumiai/sim.cljk` | 管理組合 demo driver |
 | `kotoba/kumiai/works_core.kotoba` | **The commissioning step as `state + event -> next state + an inert effect`** — the four grounds the governor holds a works order on, decided in the same order, the outcome carrying the reason. Qualified on `wasm32-browser`; **native is blocked** by kotoba-lang/amu#835 |
 | `kotoba/kumiai/resolution_core.kotoba` | **The judgement core in Kotoba** — exact cross-multiplied comparison, the exact-boundary flag, the smallest clearing tally, the quorum/notice/axes fold, and a `main` that re-derives the six statutes' boundaries and returns the failure COUNT. Builds to `aarch64-macos` and `wasm32-browser` with no capabilities and no JDK |
-| `scripts/kotoba_native_acceptance.cljs` | The JVM-free gate: builds with `amu --jvm-free` under a JDK-denying PATH, runs the guest through the native loader, compares it against the `.cljc` oracle on nbb, and fails if any JDK binary was invoked |
+| `scripts/kotoba_native_acceptance.cljk` | The JVM-free gate: builds with `amu --jvm-free` under a JDK-denying PATH, runs the guest through the native loader, compares it against the `.cljc` oracle on nbb, and fails if any JDK binary was invoked |
 | `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage · observation contract |
 
 ## The observation contract (`fee-observation/1`)
@@ -309,7 +309,7 @@ texts are observations of what a source disclosed — not what any
 management fee should be, not an offer, and not an endorsement of any
 manager or scheme.
 
-Deterministic contract tests: `test/realty/observation_test.clj` -- 35
+Deterministic contract tests: `test/realty/observation_test.cljk` -- 35
 tests over synthetic fixtures only (marked as such; the receipt URLs are
 the catalog's own provenance citations; no network, no I/O, no model).
 
