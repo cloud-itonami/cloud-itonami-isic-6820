@@ -1,5 +1,5 @@
 (ns realty.sim
-  "Demo driver -- `clojure -M:dev:run`. Walks a clean property through
+  "Demo driver -- `kbb -M:dev:run`. Walks a clean property through
   intake -> jurisdiction property-management disclosure assessment ->
   fee filing (auto-commits; no capital risk) -> fee-payment proposal
   (always escalates) -> human approval -> commit, then a clean property

@@ -1,5 +1,5 @@
 (ns realty.kumiai.sim
-  "Demo driver -- `clojure -M:dev:run-kumiai`.
+  "Demo driver -- `kbb -M:dev:run-kumiai`.
 
   Walks one association through intake -> plan assessment -> reserve
   projection under three assumption sets -> general-meeting resolution
