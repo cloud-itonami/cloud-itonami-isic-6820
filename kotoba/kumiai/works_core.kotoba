@@ -44,7 +44,7 @@
   ;; fixing it: a status is a keyword because that is what it is.
   ;;
   ;; REMOVAL CONDITION, mechanised rather than remembered:
-  ;; `scripts/kotoba_native_acceptance.cljs` carries a probe that asserts the
+  ;; `scripts/kotoba_native_acceptance.cljk` carries a probe that asserts the
   ;; defect still reproduces. When amu fixes it the probe goes RED, and that
   ;; is the signal to add `aarch64-macos` here.
   ;;

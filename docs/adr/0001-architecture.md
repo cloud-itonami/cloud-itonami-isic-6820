@@ -201,10 +201,10 @@ self-contained-sibling posture holds: no code dependency.
   first time -- any licensed property-management firm can fork and run
   their own instance.
 - (+) The actuation invariant (governor + phase, two layers) is
-  regression-tested by `test/realty/phase_test.clj`'s `fee-pay-never-
+  regression-tested by `test/realty/phase_test.cljk`'s `fee-pay-never-
   auto-at-any-phase` / `contract-execute-never-auto-at-any-phase`.
 - (+) `MemStore` ‖ `DatomicStore` parity is proven by
-  `test/realty/store_contract_test.clj`, the same `:db-api`-driven
+  `test/realty/store_contract_test.cljk`, the same `:db-api`-driven
   swap pattern every sibling actor uses, including a dedicated
   assertion that a partial upsert preserves an untouched pending
   contract (regression-proofing Decision 8's fix).
