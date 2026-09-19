@@ -231,7 +231,7 @@ actors have toward `kotoba-lang/insurance`.
 | `src/realty/governor.cljk` | **Real-Estate Fee-Services Governor** -- 7 HARD checks (spec-basis · evidence-incomplete · property-not-under-management · fee-missing · fee-calculation-mismatch, independent EXACT-match recompute · contract-missing · contract-exceeds-authorization, static cap) + double-payment guard + 1 soft (confidence/actuation gate) |
 | `src/realty/phase.cljk` | **Phase 0→3** -- read-only → assisted intake → assisted assess → supervised (payment/execution always human; property intake + fee filing auto-eligible, no capital risk) |
 | `src/realty/operation.cljk` | **OperationActor** -- langgraph-clj StateGraph |
-| `src/realty/observation.cljk` | **Observation contract** (`fee-observation/1`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
+| `src/realty/observation.cljk` | **Observation contract** (`fee-observation/2`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
 | `src/realty/sim.cljk` | demo driver |
 | `src/realty/kumiai/facts.cljk` | **管理組合** per-jurisdiction catalog: statutory resolution thresholds for JPN / DEU / ESP / FRA transcribed from each statute's current text, six further jurisdictions recorded as unverified with the reason, + the MLIT reserve-fund guideline values, with three-level honest coverage reporting |
 | `src/realty/kumiai/resolution.cljk` | Exact vote arithmetic: statutory denominator (cast ‖ attending ‖ total), per-axis fraction AND per-axis denominator, quorum stage, instrument overrides, statutory fallback (FRA art. 25-1), 第38条の2 exclusions, boundary flagging |
@@ -248,7 +248,7 @@ actors have toward `kotoba-lang/insurance`.
 | `scripts/kotoba_native_acceptance.cljk` | The JVM-free gate: builds with `amu --jvm-free` under a JDK-denying PATH, runs the guest through the native loader, compares it against the `.cljc` oracle on nbb, and fails if any JDK binary was invoked |
 | `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage · observation contract |
 
-## The observation contract (`fee-observation/1`)
+## The observation contract (`fee-observation/2`)
 
 `realty.observation` is the actor's **observation layer**: how a reading of
 an OFFICIAL source (a jurisdiction's property-management / real-estate
@@ -276,7 +276,7 @@ window** (every observation states `{:from :to}`, events must be asserted
 inside it) · **currency basis** (a disclosed-fee figure carries ISO-4217
 currency + its own nominal date + the verbatim raw transcription; nothing
 is normalized, converted or combined) · **method / version**
-(`fee-observation/1` on every artifact; no model anywhere) ·
+(`fee-observation/2` on every artifact; no model anywhere) ·
 **missingness / coverage** (closed flag vocabulary; a jurisdiction without
 a `realty.facts` spec-basis must carry `:jurisdiction-spec-basis-absent`,
 a republished fee schedule with no fee figure must carry
@@ -297,7 +297,7 @@ tampered receipts; a miss is a miss, never a default; `readback-chain`
 walks the full lineage oldest-first, refusing truncated, cyclic or
 cross-subject chains) · **history discipline** (duplicate ids refused; a
 national key is not a sub-national exemplar — re-scoping a jurisdiction
-key is refused) · **refusals** (49 loud `:refusal/code` failures instead
+key is refused) · **refusals** (64 loud `:refusal/code` failures instead
 of quiet degradation).
 
 WHAT THIS CONTRACT NEVER PRODUCES: a valuation, a market score, a ranking
@@ -309,7 +309,26 @@ texts are observations of what a source disclosed — not what any
 management fee should be, not an offer, and not an endorsement of any
 manager or scheme.
 
-Deterministic contract tests: `test/realty/observation_test.cljk` -- 35
+**V2 (donor-patterned on isic-6810's `closing-observation/2`).** Figure-level
+receipt attribution gained a **sole-receipt fallback**: a figure naming no
+`receipt` is attributed to the observation's SOLE receipt when exactly one
+exists, and refused (`:figure/ambiguous-receipt-attribution`) when several
+exist and none is named — attribution is never guessed; `refresh-delta`
+names re-attributed figures (`:delta/re-attributed`: the receipt moved, the
+verbatim figure did not). And a second artifact kind: **typed
+published-change events** — announcements ABOUT property-management
+procedure (requirement/fee/trust-account/CMP/disclosure-form/licensing
+changes, service changes) under a closed `published-change-kinds`
+vocabulary, carrying the source's own stated `:event/effective-at` (carried,
+never computed — an announcement is not a prediction), their own
+`:event/refresh-of` lineage (`record-event`/`refresh-event`), a verbatim
+`event-delta`, `readback-events`/`readback-event-chain`, and a
+`hyakka-event-proposal` stamped `:announcement-not-prediction true`. Events
+refresh events and observations refresh observations — one artifact kind is
+never the other's predecessor. Frozen `/1` artifacts stay first-class after
+the bump (`known-versions`): they revalidate, stay in history and read back.
+
+Deterministic contract tests: `test/realty/observation_test.cljk` -- 49
 tests over synthetic fixtures only (marked as such; the receipt URLs are
 the catalog's own provenance citations; no network, no I/O, no model).
 
