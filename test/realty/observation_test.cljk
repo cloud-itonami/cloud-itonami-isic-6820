@@ -1,5 +1,5 @@
 (ns realty.observation-test
-  "Deterministic contract tests for `realty.observation` (fee-observation/2;
+  "Deterministic contract tests for `realty.observation` (fee-observation/3;
   /1 artifacts stay readable via the sole-receipt fallback and known-versions).
 
   Every fixture below is SYNTHETIC and marked as such: the publication
@@ -158,7 +158,7 @@
 (deftest receipt-freezes-a-source-reading
   (let [r (ny-dos-receipt)]
     (is (= "receipt:9d8a562b4d2ab991:2026-09-01" (:receipt/id r)))
-    (is (= "fee-observation/2" (:receipt/contract-version r)))
+    (is (= "fee-observation/3" (:receipt/contract-version r)))
     (is (= :official-regulator (:receipt/source-class r)))
     (is (map? r))))
 
@@ -194,7 +194,7 @@
 
 (deftest observation-freezes-verbatim-figures-with-their-bases
   (let [o (ny-observation)]
-    (is (= "fee-observation/2" (:obs/contract-version o)))
+    (is (= "fee-observation/3" (:obs/contract-version o)))
     (is (= 1 (count (:obs/receipts o))))
     (is (= #{:disclosed-fee :requirement-count} (set (map :figure/kind (:obs/figures o)))))
     (is (= "550" (re-find #"550" (:figure/raw (ny-licence-fee-figure)))))
@@ -566,7 +566,7 @@
   (let [o (obs/observation
            (assoc (jpn-observation)
                   :obs/figures [(dissoc (jpn-fee-figure) :figure/source)]))]
-    (is (= "fee-observation/2" (:obs/contract-version o)))
+    (is (= "fee-observation/3" (:obs/contract-version o)))
     (is (= (:receipt/id (mlit-fee-receipt))
            (:figure/source (first (:obs/figures o)))))))
 
@@ -677,7 +677,7 @@
   (let [ev (jpn-amendment-event)]
     (is (= "evt:JPN:JPN:requirement-change-announced:2026-10-01:2026-09-19"
            (:event/id ev)))
-    (is (= "fee-observation/2" (:event/method ev)))
+    (is (= "fee-observation/3" (:event/method ev)))
     (is (= :requirement-change-announced (:event/kind ev)))
     (is (= "2026-10-01" (:event/effective-at ev)))
     (is (some? (:event/announcement-raw ev)))))
@@ -833,3 +833,49 @@
     (is (seq (:proposal/privacy-boundaries p)))
     (is (= 1 (count (:proposal/receipt-ids p))))
     (is (empty? (:proposal/figure-claims p)))))
+
+;; --- 8c. coverage refresh history + readback (v3) ------------------------------
+
+(deftest coverage-history-records-refreshes-deltas-and-reads-back
+  (let [c1 (obs/coverage-observation "2026-09-03")
+        c2 (obs/coverage-observation "2026-09-10")
+        h (obs/record-coverage [] c1)
+        h2 (obs/refresh-coverage h "cov-2026-09-03" c2)]
+    (testing "record validates frozen identity and refuses duplicates"
+      (is (= 1 (count h)))
+      (is (= :coverage/not-a-coverage
+             (refusal-of #(obs/record-coverage h {:coverage/recorded-at "2026-09-03"}))))
+      (is (= :history/duplicate-coverage-id
+             (refusal-of #(obs/record-coverage h c1)))))
+    (testing "refresh links lineage, refuses unknown and self"
+      (is (= "cov-2026-09-03" (:coverage/refresh-of (peek (vec h2)))))
+      (is (= :coverage/refresh-of-unknown
+             (refusal-of #(obs/refresh-coverage h "cov-nope" c2))))
+      (is (= :coverage/refresh-of-self
+             (refusal-of #(obs/refresh-coverage h "cov-2026-09-03" c1)))))
+    (testing "delta is verbatim-level, both sides carried in full"
+      (let [d (obs/coverage-delta c1 c2)]
+        (is (= :unchanged (:delta/kind d)))
+        (is (= "cov-2026-09-03" (:delta/prior-id d)))
+        (is (= "cov-2026-09-10" (:delta/next-id d)))
+        (is (empty? (:delta/changed-coverage-fields d)))
+        (is (string? (:delta/comparability-note d))))
+      (let [altered (assoc c2 :coverage/evidence-checklist-items
+                           (inc (:coverage/evidence-checklist-items c2)))
+            d (obs/coverage-delta c1 altered)]
+        (is (= :changed (:delta/kind d)))
+        (is (= [{:delta/key :coverage/evidence-checklist-items
+                 :delta/prior (:coverage/evidence-checklist-items c1)
+                 :delta/next (:coverage/evidence-checklist-items altered)}]
+               (:delta/changed-coverage-fields d)))))
+    (testing "delta refuses non-coverage artifacts"
+      (is (= :coverage/delta-cross-generation
+             (refusal-of #(obs/coverage-delta c1 {:coverage/recorded-at "2026-09-10"})))))
+    (testing "readback returns latest at-or-before, or a miss report"
+      (is (= "cov-2026-09-10" (:coverage/id (obs/readback-coverage h2 "2026-09-12"))))
+      (is (= "cov-2026-09-03" (:coverage/id (obs/readback-coverage h2 "2026-09-03"))))
+      (let [miss (obs/readback-coverage h "2026-08-01")]
+        (is (true? (:readback/miss miss)))
+        (is (string? (:readback/note miss))))
+      (is (= :coverage/bad-recorded-at
+             (refusal-of #(obs/readback-coverage h "09/03/2026")))))))
