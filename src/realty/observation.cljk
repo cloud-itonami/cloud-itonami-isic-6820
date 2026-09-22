@@ -118,14 +118,14 @@
 
 (def contract-version
   "Every receipt, observation, derived row and proposal carries this string."
-  "fee-observation/2")
+  "fee-observation/3")
 
 (def known-versions
   "The contract versions an artifact may carry and still be accepted. /1
   artifacts stay readable after the /2 bump — receipts revalidate, /1
   observations stay in history and read back, proposals still mint — while
   anything outside this set is not this contract's artifact."
-  #{"fee-observation/1" "fee-observation/2"})
+  #{"fee-observation/1" "fee-observation/2" "fee-observation/3"})
 
 ;; --- refusals (loud, never silent degradation) ------------------------------
 
@@ -187,6 +187,11 @@
     :history/subject-scope-conflict
     :delta/cross-subject
     :coverage/bad-recorded-at
+    :coverage/not-a-coverage
+    :history/duplicate-coverage-id
+    :coverage/refresh-of-unknown
+    :coverage/refresh-of-self
+    :coverage/delta-cross-generation
     :readback/tampered-receipt
     :readback/broken-lineage
     :readback/cyclic-lineage
@@ -796,12 +801,115 @@
         evidence-items (reduce + (map #(count (facts/evidence-checklist %)) ks))]
     (frozen
      {:coverage/contract-version contract-version
+      :coverage/method contract-version
+      :coverage/id (str "cov-" recorded-at)
       :coverage/recorded-at recorded-at
       :coverage/jurisdictions-with-spec-basis (count ks)
       :coverage/jurisdictions-with-provenance (count (distinct with-prov))
       :coverage/evidence-checklist-items evidence-items
       :coverage/note (:note (facts/coverage))
       :coverage/no-model true})))
+
+;; --- 8c. coverage refresh history + readback (v3) ----------------------------
+;;
+;; Before /3 a coverage artifact could be MINTED but never RECORDED: `observe`
+;; gates on :obs/contract-version, which a coverage row does not carry, so it
+;; had no refresh history, no delta and no readback. The donor (mortgage
+;; observation) reads coverage back from the same history; here coverage has
+;; its own append-only plane with the SAME discipline: frozen identity checked
+;; at record time, a duplicate id refused, a refresh linked via
+;; :coverage/refresh-of (unknown / self refused), a verbatim-level delta that
+;; computes no numeric difference, and a readback whose miss is a miss REPORT,
+;; never a default. Coverage is catalog-wide, so there is no subject key and
+;; no cross-subject refusal — the analogous refusal is a delta between
+;; artifacts of different contract generations' provenance shape, refused at
+;; :coverage/delta-cross-generation only when one side lacks the frozen
+;; identity this version records. A /2 coverage row (no :coverage/id, no
+;; :coverage/method) is refused at record time: it predates coverage history.
+
+(def ^:private coverage-frozen?
+  "The frozen-identity check for a coverage artifact this contract records."
+  (every-pred map?
+              #(contains? known-versions (:coverage/contract-version %))
+              #(contains? % :coverage/id)
+              #(contains? % :coverage/method)
+              #(contains? % :coverage/recorded-at)
+              #(contains? % :coverage/no-model)))
+
+(defn record-coverage
+  "Append a frozen coverage artifact to `history`, returning a NEW vector
+  (never mutate history in place). Refuses a non-coverage artifact or an
+  unknown contract version (:coverage/not-a-coverage) and a duplicate
+  coverage id (:history/duplicate-coverage-id)."
+  [history c]
+  (when-not (coverage-frozen? c)
+    (refuse :coverage/not-a-coverage
+            "coverage history: not a frozen coverage artifact of this contract"))
+  (when (some #(= (:coverage/id c) (:coverage/id %)) history)
+    (refuse :history/duplicate-coverage-id
+            (str "coverage history: id " (:coverage/id c) " already recorded")))
+  (conj (vec history) c))
+
+(defn refresh-coverage
+  "Record `c` as a re-reading of the coverage artifact named `prior-id`:
+  links it via :coverage/refresh-of and appends. Refuses an unknown prior
+  and a self-link. There is no cross-subject refusal here — coverage is
+  catalog-wide and has no subject key."
+  [history prior-id c]
+  (let [prior (some #(when (= prior-id (:coverage/id %)) %) history)]
+    (when-not prior
+      (refuse :coverage/refresh-of-unknown
+              (str "coverage refresh: prior artifact " prior-id " not in history")))
+    (when (= prior-id (:coverage/id c))
+      (refuse :coverage/refresh-of-self
+              "coverage refresh: a coverage artifact cannot refresh itself"))
+    (record-coverage history (assoc c :coverage/refresh-of prior-id))))
+
+(defn coverage-delta
+  "The verbatim-level audit of what moved between two recorded coverage
+  artifacts of the SAME lineage plane (any two recorded coverage rows are
+  comparable — catalog-wide, no subject key). Reports, per count field that
+  moved, BOTH sides carried in full; nothing is differenced numerically, no
+  count is normalized, no 'how much did coverage grow' is answered.
+  :delta/kind is :unchanged when nothing moved."
+  [prior next]
+  (when-not (and (coverage-frozen? prior) (coverage-frozen? next))
+    (refuse :coverage/delta-cross-generation
+            "coverage delta: both artifacts must be frozen coverage rows of this contract"))
+  (let [ks [:coverage/jurisdictions-with-spec-basis
+            :coverage/jurisdictions-with-provenance
+            :coverage/evidence-checklist-items
+            :coverage/note]
+        changed (vec (for [k ks :when (not= (get prior k) (get next k))]
+                       {:delta/key k :delta/prior (get prior k) :delta/next (get next k)}))]
+    (frozen
+     {:delta/kind (if (seq changed) :changed :unchanged)
+      :delta/prior-id (:coverage/id prior) :delta/next-id (:coverage/id next)
+      :delta/prior-recorded-at (:coverage/recorded-at prior)
+      :delta/next-recorded-at (:coverage/recorded-at next)
+      :delta/prior-contract-version (:coverage/contract-version prior)
+      :delta/next-contract-version (:coverage/contract-version next)
+      :delta/changed-coverage-fields changed
+      :delta/comparability-note
+      "verbatim-level only; no numeric difference is computed; counts are
+       carried side by side, never combined or trended"
+      :delta/contract-version contract-version})))
+
+(defn readback-coverage
+  "The latest recorded coverage artifact whose :coverage/recorded-at is at or
+  before `as-of`, re-validated on the way out. A miss is a miss REPORT —
+  never a default, never a neighbouring date's row."
+  [history as-of]
+  (when-not (iso-locale-date? as-of)
+    (refuse :coverage/bad-recorded-at "coverage readback: as-of must be YYYY-MM-DD"))
+  (let [latest (last (sort-by :coverage/recorded-at
+                              (filter #(and (coverage-frozen? %)
+                                            (not (pos? (compare (:coverage/recorded-at %) as-of))))
+                                      history)))]
+    (or latest
+        {:readback/miss true
+         :readback/as-of as-of
+         :readback/note "no coverage artifact recorded at or before this date — missing is unmeasured"})))
 
 ;; --- 9. hyakka proposal (SHAPE — this contract transmits nothing) -----------
 

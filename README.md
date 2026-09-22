@@ -231,7 +231,7 @@ actors have toward `kotoba-lang/insurance`.
 | `src/realty/governor.cljk` | **Real-Estate Fee-Services Governor** -- 7 HARD checks (spec-basis · evidence-incomplete · property-not-under-management · fee-missing · fee-calculation-mismatch, independent EXACT-match recompute · contract-missing · contract-exceeds-authorization, static cap) + double-payment guard + 1 soft (confidence/actuation gate) |
 | `src/realty/phase.cljk` | **Phase 0→3** -- read-only → assisted intake → assisted assess → supervised (payment/execution always human; property intake + fee filing auto-eligible, no capital risk) |
 | `src/realty/operation.cljk` | **OperationActor** -- langgraph-clj StateGraph |
-| `src/realty/observation.cljk` | **Observation contract** (`fee-observation/2`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
+| `src/realty/observation.cljk` | **Observation contract** (`fee-observation/3`) -- provenance-preserving observations of PUBLISHED property-management/fee-disclosure requirements over official sources; separate from the actor's own drafts |
 | `src/realty/sim.cljk` | demo driver |
 | `src/realty/kumiai/facts.cljk` | **管理組合** per-jurisdiction catalog: statutory resolution thresholds for JPN / DEU / ESP / FRA transcribed from each statute's current text, six further jurisdictions recorded as unverified with the reason, + the MLIT reserve-fund guideline values, with three-level honest coverage reporting |
 | `src/realty/kumiai/resolution.cljk` | Exact vote arithmetic: statutory denominator (cast ‖ attending ‖ total), per-axis fraction AND per-axis denominator, quorum stage, instrument overrides, statutory fallback (FRA art. 25-1), 第38条の2 exclusions, boundary flagging |
@@ -248,7 +248,7 @@ actors have toward `kotoba-lang/insurance`.
 | `scripts/kotoba_native_acceptance.cljk` | The JVM-free gate: builds with `amu --jvm-free` under a JDK-denying PATH, runs the guest through the native loader, compares it against the `.cljc` oracle on nbb, and fails if any JDK binary was invoked |
 | `test/realty/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage · observation contract |
 
-## The observation contract (`fee-observation/2`)
+## The observation contract (`fee-observation/3`)
 
 `realty.observation` is the actor's **observation layer**: how a reading of
 an OFFICIAL source (a jurisdiction's property-management / real-estate
@@ -276,7 +276,7 @@ window** (every observation states `{:from :to}`, events must be asserted
 inside it) · **currency basis** (a disclosed-fee figure carries ISO-4217
 currency + its own nominal date + the verbatim raw transcription; nothing
 is normalized, converted or combined) · **method / version**
-(`fee-observation/2` on every artifact; no model anywhere) ·
+(`fee-observation/3` on every artifact; no model anywhere) ·
 **missingness / coverage** (closed flag vocabulary; a jurisdiction without
 a `realty.facts` spec-basis must carry `:jurisdiction-spec-basis-absent`,
 a republished fee schedule with no fee figure must carry
