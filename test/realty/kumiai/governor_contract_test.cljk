@@ -10,7 +10,7 @@
   Proposals come from the real mock advisor rather than being
   hand-written, so the test exercises the pair (advisor, governor) the
   actor actually runs."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.kumiai.governor :as gov]
             [realty.kumiai.kumiaillm :as llm]
             [realty.kumiai.store :as store]))

@@ -1,5 +1,5 @@
 (ns realty.kumiai.facts-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.kumiai.facts :as f]))
 
 (deftest coverage-separates-covered-from-judgeable

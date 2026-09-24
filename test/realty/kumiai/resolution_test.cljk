@@ -7,7 +7,7 @@
   cases are built so that the SAME ballot gives opposite answers on the
   two bases -- otherwise a wrong denominator would keep agreeing with
   the right one and the test would never notice."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.kumiai.facts :as facts]
             [realty.kumiai.resolution :as r]))
 

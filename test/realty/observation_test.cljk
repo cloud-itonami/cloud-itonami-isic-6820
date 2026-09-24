@@ -10,7 +10,7 @@
   the content-hashes are sha256 over the synthetic fixture strings
   (computed once, hardcoded). No network, no I/O, no model — the whole file
   runs offline and deterministically."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.facts :as facts]
             [realty.observation :as obs]))
 

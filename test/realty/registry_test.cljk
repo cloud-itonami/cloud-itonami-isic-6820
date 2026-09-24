@@ -1,5 +1,5 @@
 (ns realty.registry-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [realty.registry :as r]))
 
 ;; ----------------------------- compute-management-fee -----------------------------

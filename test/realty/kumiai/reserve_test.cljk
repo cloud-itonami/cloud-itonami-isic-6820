@@ -18,7 +18,7 @@
      misleading improvement and the `:unmeasured-outflow` that
      contradicts it -- because a test that only checked the deficit
      would certify the bug."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.kumiai.reserve :as r]
             [realty.kumiai.store :as store]))
 
