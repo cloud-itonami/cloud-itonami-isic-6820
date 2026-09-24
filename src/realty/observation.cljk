@@ -110,7 +110,7 @@
   texts are observations of what a source disclosed — not what any
   management fee should be, not an offer, and not an endorsement of any
   manager or scheme."
-  (:require [clojure.set :as set]
+  (:require [kotoba.lang.coll :as set]
             [kotoba.lang.text :as str]
             [realty.facts :as facts]))
 
