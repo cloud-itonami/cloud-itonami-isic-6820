@@ -1,0 +1,44 @@
+;; What this vertical's robot physically does, declared for
+;; kotoba.robotics.process (kotoba-lang/robotics). `kbb -M:dev:physics` runs it.
+;;
+;; README "Robotics premise": a property-condition inspection robot documents
+;; managed-property condition for the human manager or appraiser (ISIC 6820,
+;; real estate on a fee or contract basis). Its physical work: driving the
+;; inspection rover up a sloped driveway, testing a coupon from a corroded
+;; balcony-railing bar, and judging whether a vacant unit's supply pipe behind
+;; the exterior-wall insulation freezes before the next scheduled visit.
+;;
+;; Every number without a cited source is marked `estimate` in its :basis.
+;; Replacing an estimate with a sourced value is this bot's growth work.
+{:physics/schema "itonami.physical-ai.spec.v1"
+ :repo "cloud-itonami/cloud-itonami-isic-6820"
+ :cases
+ [{:id :inspection-rover-up-driveway
+   :kind :transport
+   :procedure "inspection rover with a mast camera climbs the sloped driveway of a managed property"
+   :params {:mass-kg 40.0 :payload-kg 6.0 :distance-m 30.0 :v-max-mps 0.8 :a-max-mps2 0.5
+            :brake-decel-mps2 1.2 :drive-force-n 250.0 :crr 0.03
+            :cog-height-m 0.35 :payload-cog-height-m 1.20 :support-half-length-m 0.25
+            :max-time-s 1800.0}
+   :sweep {:param :slope-deg :values [0.0 4.0 8.0 12.0 16.0]}
+   :quantity :min-tipover-margin
+   :limit {:min 0.3 :basis "estimate: keep 30 % of the static tip-over margin in reserve with the mast camera raised"}
+   :boundary {:lo 0.0 :hi 25.0}}
+  {:id :corroded-railing-bar-coupon
+   :kind :material
+   :procedure "tensile coupon cut from a corroded balcony-railing bar (original 12 mm square); section loss is swept"
+   :params {:yield-stress-pa 235.0e6 :hardening-pa 1.0e9 :max-force-n 60000.0}
+   :sweep {:param :area-m2 :values [0.80e-4 0.95e-4 1.10e-4 1.25e-4 1.44e-4]}
+   :quantity :yield-force-n
+   :limit {:min 27000.0 :basis "estimate: 80 % of the original bar's yield load (235 MPa x 144 mm2), a manager's replace-now threshold, not a code value"}
+   :boundary {:lo 0.6e-4 :hi 1.6e-4}}
+  {:id :vacant-unit-pipe-freeze
+   :kind :thermal
+   :procedure "vacant unit with heating off: supply pipe in a chase against an uninsulated concrete exterior wall, -10 C outside, wall starting at 15 C; time until the chase side of the wall reaches 0 C"
+   :params {:conductivity-w-mk 1.4 :density-kg-m3 2300.0 :specific-heat-j-kgk 880.0
+            :t0-c 15.0 :t-hot-c -10.0 :h-front-w-m2k 20.0 :t-back-ambient-c 15.0 :h-back-w-m2k 0.0
+            :threshold-c 0.0 :threshold-direction :falling :duration-s 259200.0 :nodes 11}
+   :sweep {:param :thickness-m :values [0.12 0.15 0.20 0.25 0.30]}
+   :quantity :time-to-threshold-s
+   :limit {:min 43200.0 :basis "estimate: the chase side must not reach 0 C before the next 12-hourly check of a vacant unit; the chase is treated as adiabatic and the pipe water's own heat capacity is not modelled"}
+   :boundary {:lo 0.08 :hi 0.40}}]}
