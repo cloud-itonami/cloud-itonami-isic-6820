@@ -23,7 +23,7 @@
   Both produce confident, well-formed, plausible proposals. That is the
   point: neither is detectable from the proposal itself, only by
   recomputing it."
-  (:require #?(:clj  [clojure.edn :as edn]
+  (:require #?(:clj  [kotoba.lang.edn :as edn]
                :cljs [cljs.reader :as edn])
             [kotoba.lang.text :as str]
             [realty.kumiai.facts :as facts]
