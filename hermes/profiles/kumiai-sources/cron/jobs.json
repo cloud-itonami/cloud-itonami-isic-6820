@@ -1,0 +1,48 @@
+{
+  "jobs": [
+    {
+      "base_url": "https://api.kotoba.cloud/v1",
+      "context_from": null,
+      "deliver": "local",
+      "enabled": true,
+      "enabled_toolsets": null,
+      "id": "4fc7146b6416",
+      "model": "qwen3.8-flash-next-whitehacker",
+      "name": "kumiai-sources-probe",
+      "no_agent": true,
+      "prompt": "measure whether each jurisdiction primary legal source is actually readable (propose-only; script stdout delivered verbatim, silent when nothing changed)",
+      "provider": "kotoba",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 */6 * * *",
+        "display": "0 */6 * * *"
+      },
+      "script": "probe_kumiai_sources.py",
+      "skill": null,
+      "skills": [],
+      "workdir": null
+    },
+    {
+      "base_url": null,
+      "context_from": null,
+      "deliver": "local",
+      "enabled": true,
+      "enabled_toolsets": null,
+      "id": "7dbe7b2e7556",
+      "model": "qwen3.8-27b-whitehacker",
+      "name": "kumiai-sources-report",
+      "no_agent": false,
+      "prompt": "You are the kumiai-sources bot. Read SOUL.md in this profile first — it holds the classification rules, the things you may not do, and the exact reporting format. Follow it.\n\nEach tick:\n1. Read the last two lines of ~/.hermes/profiles/kumiai-sources/workspace/kumiai-source-ledger.jsonl (the probe job writes one line per run; do NOT fetch anything yourself).\n2. Compare them per jurisdiction. Report the single most important change, in the format SOUL.md specifies, priority REGRESSION > OPPORTUNITY > CHANGED.\n3. If the outcomes are identical, say exactly: 変化なし\n4. If the newest line shows measured < scanned, say so — a run that could not reach a source has not measured it, and that is not the same as finding nothing wrong.\n\nRules you may not break: AUS-NSW is intermittent, so a non-readable result there is normal and is NOT a regression. Never treat a 2xx as a successful read — wrong-body means the body was not the statute. undecodable means NOT MEASURED, not \"marker absent\". Never propose acting on a body obtained by defeating a bot challenge. You are propose-only: you do not edit the catalog, you say what should be read.",
+      "provider": "kotoba",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 3 * * *",
+        "display": "30 3 * * *"
+      },
+      "script": null,
+      "skill": null,
+      "skills": [],
+      "workdir": null
+    }
+  ]
+}

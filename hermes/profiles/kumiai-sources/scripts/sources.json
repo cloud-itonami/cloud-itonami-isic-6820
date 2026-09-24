@@ -1,0 +1,114 @@
+{
+  "schema": "itonami.kumiai-sources.v1",
+  "note": "Primary-source watch list for the 管理組合 actor's per-jurisdiction resolution catalog (cloud-itonami/cloud-itonami-isic-6820, realty.kumiai.facts). Verified entries are re-probed so a catalog citation cannot rot silently; unverified ones are probed across CANDIDATE urls so the gap can actually close. Markers are strings this session actually observed in the fetched body — not guesses. `intermittent` sources are re-probed but a non-readable result is not treated as a regression.",
+  "catalog": "orgs/cloud-itonami/cloud-itonami-isic-6820/src/realty/kumiai/facts.cljc",
+  "sources": [
+    {
+      "iso3": "JPN",
+      "state": "verified",
+      "statute": "建物の区分所有等に関する法律 第39条ほか",
+      "markers": [
+        "出席した区分所有者",
+        "第三十九条"
+      ],
+      "candidates": [
+        "https://laws.e-gov.go.jp/api/1/lawdata/337AC0000000069"
+      ]
+    },
+    {
+      "iso3": "DEU",
+      "state": "verified",
+      "statute": "Wohnungseigentumsgesetz § 25 Absatz 1",
+      "markers": [
+        "Mehrheit der abgegebenen Stimmen"
+      ],
+      "candidates": [
+        "https://www.gesetze-im-internet.de/woeigg/__25.html"
+      ],
+      "note": "ISO-8859-1. Shell grep treats the body as binary and reports zero matches without saying why, which is why this probe decodes explicitly."
+    },
+    {
+      "iso3": "ESP",
+      "state": "verified",
+      "statute": "Ley 49/1960 sobre propiedad horizontal, artículo 17",
+      "markers": [
+        "tres quintas partes",
+        "unanimidad del total de los propietarios"
+      ],
+      "candidates": [
+        "https://www.boe.es/buscar/act.php?id=BOE-A-1960-10906"
+      ]
+    },
+    {
+      "iso3": "FRA",
+      "state": "verified",
+      "route": "agent-fetch",
+      "statute": "Loi n° 65-557 du 10 juillet 1965, articles 24 / 25 / 25-1 / 26",
+      "markers": [
+        "voix exprimées"
+      ],
+      "candidates": [
+        "https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000051749514"
+      ],
+      "expect": "bot-challenge",
+      "note": "Verified through the agent's own fetch, which passes where this script does not. A bot-challenge result here is EXPECTED and is not a regression; only a change away from it is news."
+    },
+    {
+      "iso3": "SGP",
+      "state": "verified",
+      "statute": "Building (Strata Management) Act 2004, section 2",
+      "markers": [
+        "ordinary resolution",
+        "special resolution",
+        "90% resolution"
+      ],
+      "candidates": [
+        "https://sso.agc.gov.sg/Act/BSMA2004"
+      ],
+      "note": "The identifier is BSMA2004. BMSMA2004 answers 200 with a Page Not Found body — this catalog carried that stale id for a day and every fetch looked like a success."
+    },
+    {
+      "iso3": "ITA",
+      "state": "unverified",
+      "statute": "Codice civile, articolo 1136",
+      "markers": [
+        "deliberazioni dell'assemblea sono valide"
+      ],
+      "candidates": [
+        "https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:regio.decreto:1942-03-16;262!vig=~art1136",
+        "https://www.normattiva.it/atto/caricaArticolo?art.progressivo=0&art.idArticolo=1136&art.versione=1&art.codiceRedazionale=042U0262&art.dataPubblicazioneGazzetta=1942-04-04&art.idGruppo=0&art.idSottoArticolo1=10&art.idSottoArticolo=1&art.flagTipoArticolo=2",
+        "https://www.gazzettaufficiale.it/eli/id/1942/04/04/042U0262/sg"
+      ],
+      "todo": "Find a url that returns the text of art. 1136 rather than the navigation frame, then add an :ordinary/:special table to realty.kumiai.facts with both-direction fixtures in jurisdictions_test.clj."
+    },
+    {
+      "iso3": "CHN",
+      "state": "unverified",
+      "statute": "中华人民共和国民法典 第二百七十八条",
+      "markers": [
+        "业主共同决定"
+      ],
+      "candidates": [
+        "http://www.npc.gov.cn/npc/c30834/202006/75ba6483b8344591abd07917e1d25cc8.shtml",
+        "https://www.gov.cn/xinwen/2020-06/01/content_5516649.htm",
+        "https://www.gov.cn/zhengce/2020-06/01/content_5516649.htm",
+        "http://www.npc.gov.cn/npc/c2/c30834/202006/t20200602_306457.html"
+      ],
+      "todo": "Find a url that returns 民法典 第二百七十八条 rather than a news page (flk.npc.gov.cn is an SPA with a POST api), then add the table with both-direction fixtures."
+    },
+    {
+      "iso3": "AUS-NSW",
+      "state": "verified",
+      "statute": "Strata Schemes Management Act 2015 (NSW), section 5 and Schedule 1 clauses 14 / 17",
+      "markers": [
+        "special resolution"
+      ],
+      "candidates": [
+        "https://legislation.nsw.gov.au/view/html/inforce/current/act-2015-050",
+        "https://legislation.nsw.gov.au/view/whole/html/inforce/current/act-2015-050"
+      ],
+      "note": "Verified 2026-09-06 across two windows: s 5 in the first, Schedule 1 clauses 14 and 17 in a second. Access is intermittent (curl gets a Cloudflare interstitial; a plain urllib GET was answered twice and refused in between). Nothing was defeated and nothing may be. A non-readable result here is normal and is NOT a regression.",
+      "intermittent": true
+    }
+  ]
+}
