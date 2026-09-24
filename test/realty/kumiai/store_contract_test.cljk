@@ -4,7 +4,7 @@
   contract is what makes 'swap the SSoT' a configuration change rather
   than a rewrite -- the same pattern `realty.store-contract-test`
   establishes for the fee-services actor."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.kumiai.resolution :as res]
             [realty.kumiai.facts :as facts]
             [realty.kumiai.store :as store]))

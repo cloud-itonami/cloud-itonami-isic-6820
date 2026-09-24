@@ -1,5 +1,5 @@
 (ns realty.kumiai.phase-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.kumiai.phase :as phase]))
 
 (deftest actuation-never-auto-commits-at-any-phase

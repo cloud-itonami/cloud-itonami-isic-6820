@@ -14,7 +14,7 @@
       one but not the other;
     - a per-axis DENOMINATOR is only distinguishable when the two axes
       are counted against different bases and the answer depends on it."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [realty.kumiai.facts :as facts]
             [realty.kumiai.resolution :as r]))
 
