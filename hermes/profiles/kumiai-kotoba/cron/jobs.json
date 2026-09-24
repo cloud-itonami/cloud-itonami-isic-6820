@@ -1,0 +1,48 @@
+{
+  "jobs": [
+    {
+      "base_url": "https://api.kotoba.cloud/v1",
+      "context_from": null,
+      "deliver": "local",
+      "enabled": false,
+      "enabled_toolsets": null,
+      "id": "7ad256f0f787",
+      "model": "qwen3.8-flash-next-whitehacker",
+      "name": "kumiai-kotoba-gate",
+      "no_agent": true,
+      "prompt": "measure the Kotoba migration frontier: the JVM-free gate, amu#835, and slice qualification (propose-only; silent when nothing changed)",
+      "provider": "kotoba",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 */12 * * *",
+        "display": "0 */12 * * *"
+      },
+      "script": "kotoba_migration_tick.py",
+      "skill": null,
+      "skills": [],
+      "workdir": null
+    },
+    {
+      "base_url": null,
+      "context_from": null,
+      "deliver": "local",
+      "enabled": true,
+      "enabled_toolsets": null,
+      "id": "09e06ff5d9d1",
+      "model": "qwen3.8-27b-whitehacker",
+      "name": "kumiai-kotoba-report",
+      "no_agent": false,
+      "prompt": "You are the kumiai-kotoba bot. Read SOUL.md in this profile first — it holds what each measured line means, the priority order, and the things you may not do. Follow it.\n\nEach tick:\n1. Read the last two lines of ~/.hermes/profiles/kumiai-kotoba/workspace/kotoba-migration-ledger.jsonl (the gate job writes one line per run; do NOT run the gate yourself).\n2. Compare them. Report the single most important change, in the format SOUL.md specifies, priority UNBLOCK > GATE FAILED > SLICE > CHANGED.\n3. If they are identical, say exactly: 変化なし\n4. If the newest line has gate_exit 2, say the gate COULD NOT MEASURE and stop — that is not a pass.\n\nRules you may not break: never treat gate_exit 2 as 変化なし. Never call a green gate \"correct\" — it is correct as far as it measured, and a module once compiled AND RAN on native and still answered wrongly (kotoba-lang/amu#835). native_keyword_equality=1 is not merely good news: it means the native block on works_core.kotoba can now be removed, and your report must say what to edit. You are propose-only: you never advance the migration.",
+      "provider": "kotoba",
+      "schedule": {
+        "kind": "cron",
+        "expr": "15 16 * * *",
+        "display": "15 16 * * *"
+      },
+      "script": null,
+      "skill": null,
+      "skills": [],
+      "workdir": null
+    }
+  ]
+}
