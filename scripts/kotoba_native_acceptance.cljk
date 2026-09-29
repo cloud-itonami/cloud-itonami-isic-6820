@@ -1,7 +1,7 @@
 #!/usr/bin/env kbb
 ;; JVM-free acceptance for the Kotoba judgement core.
 ;;
-;; Q9 (CLAUDE.md) asks that build AND acceptance stay off the JDK, and that
+;; Q9 (AGENTS.md) asks that build AND acceptance stay off the JDK, and that
 ;; `java` / `javac` / `clojure` / `clj` be DENIED AND TRACED rather than
 ;; merely absent -- so that a path which quietly reaches for one fails here
 ;; instead of succeeding somewhere else.
