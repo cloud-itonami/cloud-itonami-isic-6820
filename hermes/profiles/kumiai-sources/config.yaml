@@ -10,7 +10,8 @@ model:
   provider: murakumo
   base_url: https://api.murakumo.cloud/v1
   default: mishima
-  max_tokens: 8192
+  max_tokens: 2048
+  context_length: 32768
 plugins:
   enabled: []
 _config_version: 46
